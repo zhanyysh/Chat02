@@ -435,7 +435,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Добавление пользователя в список чатов с счётчиком
-        function addChatToList(userId, username, unreadCount) {
+        async function addChatToList(userId, username, unreadCount) {
             const existingChat = document.querySelector(`.group-item[data-user-id="${userId}"]`);
             if (!existingChat) {
                 const chatItem = document.createElement('div');
@@ -446,10 +446,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span class="group-name">${username}</span>
                     ${unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : ''}
                 `;
-                chatItem.addEventListener('click', () => {
+                chatItem.addEventListener('click', async () => {
                     // Перед переключением чата помечаем сообщения текущего чата как прочитанные
                     if (currentChatUserId) {
-                        markMessagesAsRead(currentChatUserId);
+                        await markMessagesAsRead(currentChatUserId);
                     }
 
                     // Удаляем существующий разделитель перед переключением чата
@@ -495,7 +495,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Пометка сообщений как прочитанных
         async function markMessagesAsRead(receiverId) {
-            if (hasMarkedAsRead) return; // Если уже помечено, не повторяем
+            if (hasMarkedAsRead) return Promise.resolve(); // Если уже помечено, возвращаем разрешенный промис
             try {
                 const response = await fetch(`/messages/${receiverId}/mark-read`, {
                     method: 'POST',
@@ -508,9 +508,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log('Сообщения помечены как прочитанные');
                 hasMarkedAsRead = true;
                 // Перезагружаем сообщения, чтобы обновить их статус
-                loadMessages(receiverId);
+                await loadMessages(receiverId);
             } catch (error) {
                 console.error('Ошибка при пометке сообщений как прочитанных:', error);
+                throw error; // Пробрасываем ошибку, чтобы await в addChatToList мог её обработать
             }
         }
 
