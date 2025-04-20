@@ -15,6 +15,17 @@ function showFlashMessage(message, type) {
     }
 }
 
+// Вспомогательная функция для форматирования даты на русском
+function formatDateToRussian(date) {
+    const months = [
+        'Января', 'Февраля', 'Марта', 'Апреля', 'Мая', 'Июня',
+        'Июля', 'Августа', 'Сентября', 'Октября', 'Ноября', 'Декабря'
+    ];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    return `${day} ${month}`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Событие DOMContentLoaded сработало');
     const token = localStorage.getItem('token');
@@ -70,6 +81,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadProfile();
         } catch (error) {
             console.error('Ошибка проверки доступа к /my-profile:', error);
+            localStorage.removeItem('token');
+            window.location.href = '/';
+            return;
+        }
+    }
+
+    // Проверка доступа к /profile/{user_id}
+    if (window.location.pathname.startsWith('/profile/')) {
+        if (!token) {
+            console.log('Токен отсутствует, перенаправляю на /');
+            window.location.href = '/';
+            return;
+        }
+        try {
+            console.log('Запрос к /profile с токеном:', token);
+            const response = await fetch(window.location.pathname + '?token=' + encodeURIComponent(token), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                console.error('Не удалось получить доступ к /profile:', response.status, await response.text());
+                localStorage.removeItem('token');
+                window.location.href = '/';
+                return;
+            }
+            console.log('Доступ к /profile подтвержден');
+            loadUserProfile();
+        } catch (error) {
+            console.error('Ошибка проверки доступа к /profile:', error);
             localStorage.removeItem('token');
             window.location.href = '/';
             return;
@@ -189,7 +228,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Загрузка профиля
+    // Загрузка профиля текущего пользователя
     function loadProfile() {
         console.log('Загружаю профиль');
         const token = localStorage.getItem('token');
@@ -246,6 +285,60 @@ document.addEventListener('DOMContentLoaded', async () => {
             editBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка редактирования профиля');
                 window.location.href = '/edit-profile?token=' + encodeURIComponent(token);
+            });
+        }
+    }
+
+    // Загрузка профиля другого пользователя
+    function loadUserProfile() {
+        console.log('Загружаю профиль пользователя');
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.log('Токен отсутствует, перенаправляю на /');
+            window.location.href = '/';
+            return;
+        }
+        const userId = window.location.pathname.split('/')[2]; // Извлекаем user_id из URL
+        fetch(`/users/${userId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Не удалось загрузить данные пользователя: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(user => {
+            console.log('Данные пользователя:', user);
+            document.getElementById('profile-username').textContent = user.username || 'Не указано';
+            document.getElementById('profile-username-display').textContent = '@' + (user.username || 'Не указано');
+            document.getElementById('profile-mobile').textContent = user.mobile || 'Не указано';
+            if (user.date_of_birth) {
+                const dob = new Date(user.date_of_birth);
+                const age = Math.floor((new Date() - dob) / (1000 * 60 * 60 * 24 * 365.25));
+                document.getElementById('profile-dob').textContent = `${user.date_of_birth} (${age} лет)`;
+            } else {
+                document.getElementById('profile-dob').textContent = 'Не указано';
+            }
+            if (user.avatar_url) {
+                const avatarImg = document.getElementById('avatar-img');
+                avatarImg.src = user.avatar_url;
+                avatarImg.style.display = 'block';
+                document.getElementById('avatar-svg').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки профиля:', error);
+            showFlashMessage('Не удалось загрузить профиль, попробуйте снова', 'danger');
+            localStorage.removeItem('token');
+            window.location.href = '/';
+        });
+
+        const closeBtn = document.getElementById('close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                console.log('Нажата кнопка закрытия профиля');
+                window.location.href = '/chat?token=' + encodeURIComponent(token);
             });
         }
     }
@@ -367,10 +460,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     function initChat() {
         console.log('Инициализация чата');
         let currentChatUserId = null;
+        let currentGroupId = null;
         let currentUserId = null;
         let ws = null;
-        let hasMarkedAsRead = false; // Флаг для отслеживания, были ли сообщения помечены как прочитанные
-        let hasInteracted = false; // Флаг для отслеживания взаимодействия пользователя с чатом
+        let hasMarkedAsRead = false;
+        let hasInteracted = false;
+        let lastMessageDate = null; // Для отслеживания последней даты сообщения
 
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
@@ -380,8 +475,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const searchResults = document.getElementById('search-results');
         const logoutBtn = document.getElementById('logout-btn');
         const profileBtn = document.getElementById('profile-btn');
+        const createGroupBtn = document.getElementById('create-group-btn');
         const menuIcon = document.querySelector('.menu-icon');
         const menuDrawer = document.querySelector('.menu-drawer');
+        const moreOptions = document.querySelector('.more-options');
+        const chatOptionsDrawer = document.querySelector('.chat-options-drawer');
+        const createGroupModal = document.getElementById('create-group-modal');
+        const createGroupForm = document.getElementById('create-group-form');
+        const groupNameInput = document.getElementById('group-name');
+        const groupMembersInput = document.getElementById('group-members');
+        const groupMembersList = document.getElementById('group-members-list');
+        const groupMembersSearchResults = document.getElementById('group-members-search-results');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const groupInfoModal = document.getElementById('group-info-modal');
+        const groupInfoTitle = document.getElementById('group-info-title');
+        const groupCreator = document.getElementById('group-creator');
+        const groupMembers = document.getElementById('group-members');
+        const closeGroupInfoBtn = document.getElementById('close-group-info-btn');
 
         if (menuIcon && menuDrawer) {
             menuIcon.addEventListener('click', () => {
@@ -411,6 +521,322 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        if (createGroupBtn) {
+            createGroupBtn.addEventListener('click', () => {
+                console.log('Нажата кнопка создания группы');
+                menuDrawer.classList.remove('active');
+                createGroupModal.style.display = 'block';
+            });
+        }
+
+        if (moreOptions && chatOptionsDrawer) {
+            moreOptions.addEventListener('click', () => {
+                console.log('Нажата иконка дополнительных опций чата');
+                if (!currentChatUserId && !currentGroupId) {
+                    showFlashMessage('Выберите чат или группу', 'warning');
+                    return;
+                }
+                // Очищаем предыдущие кнопки
+                chatOptionsDrawer.innerHTML = '';
+
+                if (currentGroupId) {
+                    // Меню для группы
+                    const infoBtn = document.createElement('button');
+                    infoBtn.textContent = 'Инфо о группе';
+                    infoBtn.addEventListener('click', async () => {
+                        try {
+                            const response = await fetch(`/groups/${currentGroupId}/info`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const groupInfo = await response.json();
+                            if (response.ok) {
+                                groupInfoTitle.textContent = groupInfo.name;
+                                groupCreator.textContent = groupInfo.creator.username;
+                                groupCreator.dataset.userId = groupInfo.creator.id;
+                                groupCreator.className = 'value clickable';
+                                groupCreator.addEventListener('click', () => {
+                                    window.location.href = `/profile/${groupInfo.creator.id}?token=${encodeURIComponent(token)}`;
+                                });
+
+                                groupMembers.innerHTML = '';
+                                groupInfo.members.forEach(member => {
+                                    const memberDiv = document.createElement('div');
+                                    memberDiv.className = 'group-member';
+                                    memberDiv.innerHTML = `
+                                        <div class="avatar">
+                                            ${member.avatar_url 
+                                                ? `<img src="${member.avatar_url}" alt="${member.username}">`
+                                                : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <rect width="24" height="24" rx="12" fill="#1E90FF"/>
+                                                    <circle cx="12" cy="8" r="4" fill="white"/>
+                                                    <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
+                                                </svg>`
+                                            }
+                                        </div>
+                                        <div class="username">${member.username}</div>
+                                    `;
+                                    memberDiv.dataset.userId = member.id;
+                                    memberDiv.addEventListener('click', () => {
+                                        window.location.href = `/profile/${member.id}?token=${encodeURIComponent(token)}`;
+                                    });
+                                    groupMembers.appendChild(memberDiv);
+                                });
+
+                                groupInfoModal.style.display = 'block';
+                            } else {
+                                showFlashMessage(groupInfo.detail, 'danger');
+                            }
+                        } catch (error) {
+                            console.error('Ошибка загрузки информации о группе:', error);
+                            showFlashMessage('Не удалось загрузить информацию о группе', 'danger');
+                        }
+                        chatOptionsDrawer.classList.remove('active');
+                    });
+                    chatOptionsDrawer.appendChild(infoBtn);
+
+                    const clearBtn = document.createElement('button');
+                    clearBtn.textContent = 'Очистить чат';
+                    clearBtn.addEventListener('click', async () => {
+                        try {
+                            const response = await fetch(`/messages/group/${currentGroupId}/clear`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const result = await response.json();
+                            if (response.ok) {
+                                showFlashMessage('Чат очищен', 'success');
+                                loadMessages(null, currentGroupId);
+                            } else {
+                                showFlashMessage(result.detail, 'danger');
+                            }
+                        } catch (error) {
+                            console.error('Ошибка очистки чата:', error);
+                            showFlashMessage('Не удалось очистить чат', 'danger');
+                        }
+                        chatOptionsDrawer.classList.remove('active');
+                    });
+                    chatOptionsDrawer.appendChild(clearBtn);
+
+                    const leaveBtn = document.createElement('button');
+                    leaveBtn.textContent = 'Выйти из группы';
+                    leaveBtn.className = 'danger';
+                    leaveBtn.addEventListener('click', async () => {
+                        try {
+                            const response = await fetch(`/groups/${currentGroupId}/leave`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const result = await response.json();
+                            if (response.ok) {
+                                showFlashMessage('Вы вышли из группы', 'success');
+                                currentGroupId = null;
+                                document.getElementById('chat-title').textContent = 'Чат';
+                                chatMessages.innerHTML = '';
+                                loadRecentChats();
+                            } else {
+                                showFlashMessage(result.detail, 'danger');
+                            }
+                        } catch (error) {
+                            console.error('Ошибка выхода из группы:', error);
+                            showFlashMessage('Не удалось выйти из группы', 'danger');
+                        }
+                        chatOptionsDrawer.classList.remove('active');
+                    });
+                    chatOptionsDrawer.appendChild(leaveBtn);
+                } else {
+                    // Меню для личного чата
+                    const infoBtn = document.createElement('button');
+                    infoBtn.textContent = 'Инфо о пользователе';
+                    infoBtn.addEventListener('click', () => {
+                        window.location.href = `/profile/${currentChatUserId}?token=${encodeURIComponent(token)}`;
+                        chatOptionsDrawer.classList.remove('active');
+                    });
+                    chatOptionsDrawer.appendChild(infoBtn);
+
+                    const clearBtn = document.createElement('button');
+                    clearBtn.textContent = 'Очистить чат';
+                    clearBtn.addEventListener('click', async () => {
+                        try {
+                            const response = await fetch(`/messages/${currentChatUserId}/clear`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const result = await response.json();
+                            if (response.ok) {
+                                showFlashMessage('Чат очищен', 'success');
+                                loadMessages(currentChatUserId, null);
+                            } else {
+                                showFlashMessage(result.detail, 'danger');
+                            }
+                        } catch (error) {
+                            console.error('Ошибка очистки чата:', error);
+                            showFlashMessage('Не удалось очистить чат', 'danger');
+                        }
+                        chatOptionsDrawer.classList.remove('active');
+                    });
+                    chatOptionsDrawer.appendChild(clearBtn);
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'Удалить чат';
+                    deleteBtn.className = 'danger';
+                    deleteBtn.addEventListener('click', async () => {
+                        try {
+                            const response = await fetch(`/messages/${currentChatUserId}/delete`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const result = await response.json();
+                            if (response.ok) {
+                                showFlashMessage('Чат удалён', 'success');
+                                currentChatUserId = null;
+                                document.getElementById('chat-title').textContent = 'Чат';
+                                chatMessages.innerHTML = '';
+                                loadRecentChats();
+                            } else {
+                                showFlashMessage(result.detail, 'danger');
+                            }
+                        } catch (error) {
+                            console.error('Ошибка удаления чата:', error);
+                            showFlashMessage('Не удалось удалить чат', 'danger');
+                        }
+                        chatOptionsDrawer.classList.remove('active');
+                    });
+                    chatOptionsDrawer.appendChild(deleteBtn);
+                }
+
+                chatOptionsDrawer.classList.toggle('active');
+            });
+
+            // Закрываем меню при клике вне его
+            document.addEventListener('click', (e) => {
+                if (!moreOptions.contains(e.target) && !chatOptionsDrawer.contains(e.target)) {
+                    chatOptionsDrawer.classList.remove('active');
+                }
+            });
+        }
+
+        if (closeModalBtn) {
+            closeModalBtn.addEventListener('click', () => {
+                console.log('Нажата кнопка закрытия модального окна');
+                createGroupModal.style.display = 'none';
+                groupNameInput.value = '';
+                groupMembersInput.value = '';
+                groupMembersList.innerHTML = '';
+                groupMembersSearchResults.innerHTML = '';
+                groupMembersSearchResults.classList.remove('active');
+            });
+        }
+
+        if (closeGroupInfoBtn) {
+            closeGroupInfoBtn.addEventListener('click', () => {
+                console.log('Нажата кнопка закрытия модального окна группы');
+                groupInfoModal.style.display = 'none';
+            });
+        }
+
+        if (createGroupForm) {
+            createGroupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Форма создания группы отправлена');
+                const groupName = groupNameInput.value.trim();
+                const memberIds = Array.from(groupMembersList.children).map(item => parseInt(item.dataset.userId));
+                if (!groupName || groupName.length < 3) {
+                    showFlashMessage('Название группы должно содержать минимум 3 символа', 'danger');
+                    return;
+                }
+                if (memberIds.length === 0) {
+                    showFlashMessage('Выберите хотя бы одного участника', 'danger');
+                    return;
+                }
+                try {
+                    const response = await fetch('/groups', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ name: groupName, member_ids: memberIds })
+                    });
+                    const result = await response.json();
+                    if (response.ok) {
+                        showFlashMessage('Группа успешно создана', 'success');
+                        createGroupModal.style.display = 'none';
+                        groupNameInput.value = '';
+                        groupMembersInput.value = '';
+                        groupMembersList.innerHTML = '';
+                        groupMembersSearchResults.innerHTML = '';
+                        groupMembersSearchResults.classList.remove('active');
+                        await loadRecentChats();
+                        // Автоматически открываем созданную группу
+                        const newGroupId = result.group_id;
+                        currentChatUserId = null;
+                        currentGroupId = newGroupId;
+                        document.getElementById('chat-title').textContent = groupName;
+                        loadMessages(null, newGroupId);
+                        document.querySelectorAll('.group-item').forEach(item => item.classList.remove('active'));
+                        const chatItem = document.querySelector(`.group-item[data-id="${newGroupId}"][data-is-group="true"]`);
+                        if (chatItem) chatItem.classList.add('active');
+                    } else {
+                        showFlashMessage(result.detail, 'danger');
+                    }
+                } catch (error) {
+                    console.error('Ошибка создания группы:', error);
+                    showFlashMessage('Не удалось создать группу, попробуйте снова', 'danger');
+                }
+            });
+        }
+
+        // Поиск пользователей для добавления в группу
+        if (groupMembersInput) {
+            groupMembersInput.addEventListener('input', async () => {
+                const query = groupMembersInput.value.trim();
+                if (query.length < 2) {
+                    groupMembersSearchResults.classList.remove('active');
+                    groupMembersSearchResults.innerHTML = '';
+                    return;
+                }
+                try {
+                    const response = await fetch(`/users/search?query=${encodeURIComponent(query)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Поиск не удался: ${response.status}`);
+                    }
+                    const users = await response.json();
+                    groupMembersSearchResults.innerHTML = '';
+                    if (users.length === 0) {
+                        groupMembersSearchResults.innerHTML = '<div class="search-result-item">Пользователи не найдены</div>';
+                    } else {
+                        users.forEach(user => {
+                            const item = document.createElement('div');
+                            item.className = 'search-result-item';
+                            item.innerHTML = `
+                                <div class="avatar">${user.username[0].toUpperCase()}</div>
+                                <div class="username">${user.username}</div>
+                            `;
+                            item.addEventListener('click', () => {
+                                if (!groupMembersList.querySelector(`[data-user-id="${user.id}"]`)) {
+                                    const memberItem = document.createElement('div');
+                                    memberItem.className = 'group-member-item';
+                                    memberItem.dataset.userId = user.id;
+                                    memberItem.textContent = user.username;
+                                    memberItem.addEventListener('click', () => memberItem.remove());
+                                    groupMembersList.appendChild(memberItem);
+                                }
+                                groupMembersInput.value = '';
+                                groupMembersSearchResults.classList.remove('active');
+                            });
+                            groupMembersSearchResults.appendChild(item);
+                        });
+                    }
+                    groupMembersSearchResults.classList.add('active');
+                } catch (error) {
+                    console.error('Ошибка поиска:', error);
+                    showFlashMessage('Не удалось найти пользователей', 'danger');
+                }
+            });
+        }
+
         // Загрузка недавних чатов
         async function loadRecentChats() {
             console.log('Загружаю недавние чаты');
@@ -426,7 +852,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log('Недавние чаты:', recentChats);
                 chatList.innerHTML = '';
                 recentChats.forEach(chat => {
-                    addChatToList(chat.user_id, chat.username, chat.unread_count);
+                    addChatToList(chat.user_id, chat.group_id, chat.username, chat.avatar_url, chat.unread_count, chat.is_group);
                 });
             } catch (error) {
                 console.error('Ошибка загрузки недавних чатов:', error);
@@ -434,48 +860,71 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // Добавление пользователя в список чатов с счётчиком
-        async function addChatToList(userId, username, unreadCount) {
-            const existingChat = document.querySelector(`.group-item[data-user-id="${userId}"]`);
+        // Добавление пользователя или группы в список чатов
+        async function addChatToList(userId, groupId, username, avatarUrl, unreadCount, isGroup) {
+            const id = isGroup ? groupId : userId;
+            const existingChat = document.querySelector(`.group-item[data-id="${id}"][data-is-group="${isGroup}"]`);
             if (!existingChat) {
                 const chatItem = document.createElement('div');
                 chatItem.className = 'group-item';
-                chatItem.dataset.userId = userId;
-                chatItem.dataset.chatType = 'private';
-                chatItem.innerHTML = `
+                chatItem.dataset.id = id;
+                chatItem.dataset.isGroup = isGroup;
+
+                // Добавляем аватарку
+                const avatarDiv = document.createElement('div');
+                avatarDiv.className = 'group-avatar';
+                if (avatarUrl) {
+                    const avatarImg = document.createElement('img');
+                    avatarImg.src = avatarUrl;
+                    avatarImg.alt = username;
+                    avatarDiv.appendChild(avatarImg);
+                } else {
+                    avatarDiv.innerHTML = `
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="24" height="24" rx="12" fill="#1E90FF"/>
+                            <circle cx="12" cy="8" r="4" fill="white"/>
+                            <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
+                        </svg>
+                    `;
+                }
+                chatItem.appendChild(avatarDiv);
+
+                // Добавляем информацию о чате
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'group-info';
+                infoDiv.innerHTML = `
                     <span class="group-name">${username}</span>
                     ${unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : ''}
                 `;
-                chatItem.addEventListener('click', async () => {
-                    // Перед переключением чата помечаем сообщения текущего чата как прочитанные
-                    if (currentChatUserId) {
-                        await markMessagesAsRead(currentChatUserId);
-                    }
+                chatItem.appendChild(infoDiv);
 
-                    // Удаляем существующий разделитель перед переключением чата
+                chatItem.addEventListener('click', async () => {
+                    if (currentChatUserId || currentGroupId) {
+                        await markMessagesAsRead(currentChatUserId, currentGroupId);
+                    }
                     const existingDivider = document.querySelector('.unread-divider');
                     if (existingDivider) {
                         existingDivider.remove();
                     }
-
-                    currentChatUserId = parseInt(userId);
+                    currentChatUserId = isGroup ? null : userId;
+                    currentGroupId = isGroup ? groupId : null;
                     document.querySelectorAll('.group-item').forEach(item => item.classList.remove('active'));
                     chatItem.classList.add('active');
                     document.getElementById('chat-title').textContent = username;
-                    hasMarkedAsRead = false; // Сбрасываем флаг при открытии нового чата
-                    hasInteracted = false; // Сбрасываем флаг взаимодействия
-                    loadMessages(currentChatUserId);
-                    updateUnreadCount(userId, 0);
+                    hasMarkedAsRead = false;
+                    hasInteracted = false;
+                    loadMessages(userId, groupId);
+                    updateUnreadCount(id, isGroup, 0);
                 });
                 chatList.appendChild(chatItem);
             } else {
-                updateUnreadCount(userId, unreadCount);
+                updateUnreadCount(id, isGroup, unreadCount);
             }
         }
 
         // Обновление счётчика непрочитанных сообщений
-        function updateUnreadCount(userId, unreadCount) {
-            const chatItem = document.querySelector(`.group-item[data-user-id="${userId}"]`);
+        function updateUnreadCount(id, isGroup, unreadCount) {
+            const chatItem = document.querySelector(`.group-item[data-id="${id}"][data-is-group="${isGroup}"]`);
             if (chatItem) {
                 const existingCounter = chatItem.querySelector('.unread-count');
                 if (unreadCount > 0) {
@@ -485,7 +934,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         const counter = document.createElement('span');
                         counter.className = 'unread-count';
                         counter.textContent = unreadCount;
-                        chatItem.appendChild(counter);
+                        chatItem.querySelector('.group-info').appendChild(counter);
                     }
                 } else if (existingCounter) {
                     existingCounter.remove();
@@ -494,10 +943,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Пометка сообщений как прочитанных
-        async function markMessagesAsRead(receiverId) {
-            if (hasMarkedAsRead) return Promise.resolve(); // Если уже помечено, возвращаем разрешенный промис
+        async function markMessagesAsRead(userId, groupId) {
+            if (hasMarkedAsRead) return Promise.resolve();
             try {
-                const response = await fetch(`/messages/${receiverId}/mark-read`, {
+                const url = groupId ? `/messages/group/${groupId}/mark-read` : `/messages/${userId}/mark-read`;
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -507,11 +957,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 console.log('Сообщения помечены как прочитанные');
                 hasMarkedAsRead = true;
-                // Перезагружаем сообщения, чтобы обновить их статус
-                await loadMessages(receiverId);
+                await loadMessages(userId, groupId);
             } catch (error) {
                 console.error('Ошибка при пометке сообщений как прочитанных:', error);
-                throw error; // Пробрасываем ошибку, чтобы await в addChatToList мог её обработать
+                throw error;
             }
         }
 
@@ -522,7 +971,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             let firstUnreadMessage = null;
             let foundUnread = false;
 
-            // Находим первое непрочитанное сообщение
             messages.forEach(message => {
                 const isOwnMessage = message.classList.contains('own-message');
                 const isRead = message.dataset.read === 'true';
@@ -532,7 +980,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
 
-            // Если есть непрочитанные сообщения и разделителя нет, добавляем его
             if (foundUnread && !existingDivider) {
                 const divider = document.createElement('div');
                 divider.className = 'unread-divider';
@@ -541,9 +988,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (!foundUnread && existingDivider) {
                 existingDivider.remove();
             }
-            console.log('Найдено непрочитанных сообщений:', document.querySelectorAll('.chat-message:not(.own-message):not([data-read="true"])').length);
 
-            // Проверяем, виден ли разделитель или первое непрочитанное сообщение
             if (firstUnreadMessage && !hasMarkedAsRead && hasInteracted) {
                 const divider = document.querySelector('.unread-divider');
                 const dividerRect = divider ? divider.getBoundingClientRect() : null;
@@ -553,7 +998,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     (divider && dividerRect.top >= chatRect.top && dividerRect.bottom <= chatRect.bottom) ||
                     (messageRect.top >= chatRect.top && messageRect.bottom <= chatRect.bottom)
                 ) {
-                    markMessagesAsRead(currentChatUserId);
+                    markMessagesAsRead(currentChatUserId, currentGroupId);
                 }
             }
         }
@@ -562,7 +1007,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         async function initWebSocket() {
             console.log('Инициализация WebSocket');
             const token = localStorage.getItem('token');
-            console.log('Токен для WebSocket:', token);
             if (!token) {
                 showFlashMessage('Токен не найден, пожалуйста, войдите снова', 'danger');
                 window.location.href = '/';
@@ -570,7 +1014,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             try {
-                console.log('Запрос к /users/me');
                 const response = await fetch('/users/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -578,7 +1021,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(`Не удалось загрузить данные пользователя: ${response.status}`);
                 }
                 const user = await response.json();
-                console.log('Данные пользователя:', user);
                 currentUserId = user.id;
                 ws = new WebSocket(`ws://${window.location.host}/ws/${user.id}`);
 
@@ -591,19 +1033,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                     console.log('Получено сообщение:', message);
                     if (message.sender_id !== currentUserId && !message.is_read) {
                         const senderId = message.sender_id;
-                        // Увеличиваем счётчик, если чат не активен
-                        if (senderId !== currentChatUserId) {
-                            const chatItem = document.querySelector(`.group-item[data-user-id="${senderId}"]`);
-                            let currentCount = 0;
-                            if (chatItem) {
-                                const counter = chatItem.querySelector('.unread-count');
-                                currentCount = counter ? parseInt(counter.textContent) : 0;
+                        const groupId = message.group_id;
+                        if (groupId) {
+                            if (groupId !== currentGroupId) {
+                                const chatItem = document.querySelector(`.group-item[data-id="${groupId}"][data-is-group="true"]`);
+                                let currentCount = 0;
+                                if (chatItem) {
+                                    const counter = chatItem.querySelector('.unread-count');
+                                    currentCount = counter ? parseInt(counter.textContent) : 0;
+                                }
+                                updateUnreadCount(groupId, true, currentCount + 1);
                             }
-                            updateUnreadCount(senderId, currentCount + 1);
+                            addChatToList(null, groupId, message.username, message.avatar_url, 0, true);
+                        } else {
+                            if (senderId !== currentChatUserId) {
+                                const chatItem = document.querySelector(`.group-item[data-id="${senderId}"][data-is-group="false"]`);
+                                let currentCount = 0;
+                                if (chatItem) {
+                                    const counter = chatItem.querySelector('.unread-count');
+                                    currentCount = counter ? parseInt(counter.textContent) : 0;
+                                }
+                                updateUnreadCount(senderId, false, currentCount + 1);
+                            }
+                            addChatToList(senderId, null, message.username, message.avatar_url, 0, false);
                         }
-                        addChatToList(senderId, message.username, 0);
                     }
-                    if (message.receiver_id === currentChatUserId || message.sender_id === currentChatUserId) {
+                    if ((message.receiver_id === currentChatUserId && !message.group_id) || message.group_id === currentGroupId) {
                         displayMessage(message);
                         updateUnreadDivider();
                     }
@@ -625,10 +1080,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Загрузка сообщений
-        async function loadMessages(receiverId) {
-            console.log('Загружаю сообщения для получателя:', receiverId);
+        async function loadMessages(userId, groupId) {
+            console.log('Загружаю сообщения для:', { userId, groupId });
             try {
-                const response = await fetch(`/messages/${receiverId}`, {
+                const url = groupId ? `/messages/group/${groupId}` : `/messages/${userId}`;
+                const response = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!response.ok) {
@@ -638,16 +1094,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const messages = await response.json();
                 console.log('Загружены сообщения:', messages);
                 chatMessages.innerHTML = '';
+                lastMessageDate = null; // Сбрасываем дату последнего сообщения
                 messages.forEach(displayMessage);
-
-                // Прокручиваем к первому непрочитанному сообщению или разделителю
                 const firstUnreadMessage = chatMessages.querySelector('.chat-message:not(.own-message):not([data-read="true"])');
                 if (firstUnreadMessage) {
                     firstUnreadMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 } else {
-                    chatMessages.scrollTop = chatMessages.scrollHeight; // Если нет непрочитанных, прокручиваем вниз
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
                 }
-
                 updateUnreadDivider();
             } catch (error) {
                 console.error('Ошибка загрузки сообщений:', error);
@@ -658,6 +1112,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Отображение сообщения
         function displayMessage(message) {
             console.log(`Отображаю сообщение: sender_id=${message.sender_id}, currentUserId=${currentUserId}, isOwnMessage=${message.sender_id === currentUserId}`);
+            
+            // Получаем дату сообщения
+            const messageDate = new Date(message.timestamp);
+            const messageDateString = messageDate.toISOString().split('T')[0]; // Формат YYYY-MM-DD
+
+            // Проверяем, отличается ли дата от предыдущего сообщения
+            if (lastMessageDate !== messageDateString) {
+                const divider = document.createElement('div');
+                divider.className = 'date-divider';
+                divider.textContent = formatDateToRussian(messageDate);
+                chatMessages.appendChild(divider);
+                lastMessageDate = messageDateString;
+            }
+
+            // Создаём элемент сообщения
             const div = document.createElement('div');
             const isOwnMessage = message.sender_id === currentUserId;
             div.className = `chat-message ${isOwnMessage ? 'own-message' : ''}`;
@@ -708,8 +1177,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             chatForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 console.log('Форма чата отправлена');
-                if (!currentChatUserId) {
-                    showFlashMessage('Выберите чат', 'warning');
+                if (!currentChatUserId && !currentGroupId) {
+                    showFlashMessage('Выберите чат или группу', 'warning');
                     return;
                 }
                 if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -721,16 +1190,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     console.log('Отправляю сообщение:', content);
                     ws.send(JSON.stringify({
                         content,
-                        receiver_id: currentChatUserId
+                        receiver_id: currentChatUserId,
+                        group_id: currentGroupId
                     }));
                     messageInput.value = '';
-                    hasInteracted = true; // Пользователь отправил сообщение
+                    hasInteracted = true;
                     updateUnreadDivider();
                 }
             });
         }
 
-        // Поиск пользователей
+        // Поиск пользователей для начала чата
         if (searchInput) {
             searchInput.addEventListener('input', async () => {
                 console.log('Изменен ввод поиска:', searchInput.value);
@@ -764,13 +1234,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                             item.addEventListener('click', () => {
                                 console.log('Выбран результат поиска:', user);
                                 currentChatUserId = user.id;
+                                currentGroupId = null;
                                 document.getElementById('chat-title').textContent = user.username;
-                                loadMessages(user.id);
+                                loadMessages(user.id, null);
                                 searchResults.classList.remove('active');
                                 searchInput.value = '';
-                                addChatToList(user.id, user.username, 0);
+                                addChatToList(user.id, null, user.username, null, 0, false);
                                 document.querySelectorAll('.group-item').forEach(item => item.classList.remove('active'));
-                                const chatItem = document.querySelector(`.group-item[data-user-id="${user.id}"]`);
+                                const chatItem = document.querySelector(`.group-item[data-id="${user.id}"][data-is-group="false"]`);
                                 if (chatItem) chatItem.classList.add('active');
                             });
                             searchResults.appendChild(item);
@@ -784,18 +1255,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // Добавляем обработчик прокрутки для проверки видимости непрочитанных сообщений
         chatMessages.addEventListener('scroll', () => {
-            if (currentChatUserId) {
-                hasInteracted = true; // Пользователь прокрутил чат
+            if (currentChatUserId || currentGroupId) {
+                hasInteracted = true;
                 updateUnreadDivider();
             }
         });
 
-        // Добавляем обработчик клика для отслеживания взаимодействия
         chatMessages.addEventListener('click', () => {
-            if (currentChatUserId) {
-                hasInteracted = true; // Пользователь кликнул в чате
+            if (currentChatUserId || currentGroupId) {
+                hasInteracted = true;
                 updateUnreadDivider();
             }
         });
