@@ -1,7 +1,7 @@
 import sqlite3
 import uuid
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, status, Request, File, UploadFile, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, status, Request, File, UploadFile, Form, Query
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
@@ -142,7 +142,7 @@ class ConnectionManager:
         if user_id in self.active_connections:
             del self.active_connections[user_id]
 
-    async def send_personal_message(self, message: dict, user_id: int):
+    async def send_personal_message(self, message: dict, user_id: int):  
         if user_id in self.active_connections:
             await self.active_connections[user_id].send_json(message)
 
@@ -173,7 +173,8 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
             user_id: str = payload.get("sub")
             if user_id is None:
                 raise credentials_exception
-        except JWTError:
+        except JWTError as e:
+            print(f"JWT Error: {e}")
             raise credentials_exception
     else:
         token = request.query_params.get("token")
@@ -184,7 +185,8 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
             user_id: str = payload.get("sub")
             if user_id is None:
                 raise credentials_exception
-        except JWTError:
+        except JWTError as e:
+            print(f"JWT Error: {e}")
             raise credentials_exception
 
     conn = sqlite3.connect("chat.db")
@@ -226,9 +228,37 @@ async def get_edit_profile(request: Request, current_user: dict = Depends(get_cu
     with open("edit-profile.html", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
+# Добавляем маршрут для favicon.ico
+@app.get("/favicon.ico", response_class=FileResponse)
+async def favicon():
+    favicon_path = os.path.join("static", "favicon.ico")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    raise HTTPException(status_code=404, detail="Favicon not found")
+
 @app.get("/users/me")
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     return current_user
+
+# Перемещаем маршрут /users/search выше /users/{user_id}
+@app.get("/users/search")
+async def search_users(
+    query: str = Query(..., min_length=2, description="Search query for users"),
+    current_user: dict = Depends(get_current_user)
+):
+    print(f"Received search query: {query}")  # Отладка
+    if len(query.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Query must be at least 2 characters long")
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username FROM users WHERE username LIKE ? AND id != ? LIMIT 10",
+        (f"%{query}%", current_user["id"])
+    )
+    users = [{"id": user[0], "username": user[1]} for user in cursor.fetchall()]
+    print(f"Found users: {users}")  # Отладка
+    conn.close()
+    return users
 
 @app.get("/users/{user_id}")
 async def get_user_info(user_id: int, current_user: dict = Depends(get_current_user)):
@@ -328,18 +358,6 @@ async def signup(user: User):
         raise HTTPException(status_code=400, detail="Username or email already exists")
     finally:
         conn.close()
-
-@app.get("/users/search")
-async def search_users(query: str, current_user: dict = Depends(get_current_user)):
-    conn = sqlite3.connect("chat.db")
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id, username FROM users WHERE username LIKE ? AND id != ? LIMIT 10",
-        (f"%{query}%", current_user["id"])
-    )
-    users = [{"id": user[0], "username": user[1]} for user in cursor.fetchall()]
-    conn.close()
-    return users
 
 @app.post("/groups")
 async def create_group(group: GroupCreate, current_user: dict = Depends(get_current_user)):
@@ -777,3 +795,4 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+  

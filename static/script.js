@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } catch (error) {
             console.error('Ошибка регистрации:', error);
-            showFlashMessage('Не удалось зарегистрироваться, попробуйте снова', 'danger');
+            showFlashMessage(`Не удалось зарегистрироваться: ${error.message}`, 'danger');
         }
     }
 
@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         })
         .catch(error => {
             console.error('Ошибка загрузки профиля:', error);
-            showFlashMessage('Не удалось загрузить профиль, попробуйте снова', 'danger');
+            showFlashMessage(`Не удалось загрузить профиль: ${error.message}`, 'danger');
             localStorage.removeItem('token');
             window.location.href = '/';
         });
@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         })
         .catch(error => {
             console.error('Ошибка загрузки профиля:', error);
-            showFlashMessage('Не удалось загрузить профиль, попробуйте снова', 'danger');
+            showFlashMessage(`Не удалось загрузить профиль: ${error.message}`, 'danger');
             localStorage.removeItem('token');
             window.location.href = '/';
         });
@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         })
         .catch(error => {
             console.error('Ошибка загрузки данных профиля:', error);
-            showFlashMessage('Не удалось загрузить данные профиля, попробуйте снова', 'danger');
+            showFlashMessage(`Не удалось загрузить данные профиля: ${error.message}`, 'danger');
             localStorage.removeItem('token');
             window.location.href = '/';
         });
@@ -435,7 +435,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 } catch (error) {
                     console.error('Ошибка обновления:', error);
-                    showFlashMessage('Не удалось обновить профиль, попробуйте снова', 'danger');
+                    showFlashMessage(`Не удалось обновить профиль: ${error.message}`, 'danger');
                 }
             });
         }
@@ -588,7 +588,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
                         } catch (error) {
                             console.error('Ошибка загрузки информации о группе:', error);
-                            showFlashMessage('Не удалось загрузить информацию о группе', 'danger');
+                            showFlashMessage(`Не удалось загрузить информацию о группе: ${error.message}`, 'danger');
                         }
                         chatOptionsDrawer.classList.remove('active');
                     });
@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
                         } catch (error) {
                             console.error('Ошибка очистки чата:', error);
-                            showFlashMessage('Не удалось очистить чат', 'danger');
+                            showFlashMessage(`Не удалось очистить чат: ${error.message}`, 'danger');
                         }
                         chatOptionsDrawer.classList.remove('active');
                     });
@@ -638,7 +638,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
                         } catch (error) {
                             console.error('Ошибка выхода из группы:', error);
-                            showFlashMessage('Не удалось выйти из группы', 'danger');
+                            showFlashMessage(`Не удалось выйти из группы: ${error.message}`, 'danger');
                         }
                         chatOptionsDrawer.classList.remove('active');
                     });
@@ -670,7 +670,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
                         } catch (error) {
                             console.error('Ошибка очистки чата:', error);
-                            showFlashMessage('Не удалось очистить чат', 'danger');
+                            showFlashMessage(`Не удалось очистить чат: ${error.message}`, 'danger');
                         }
                         chatOptionsDrawer.classList.remove('active');
                     });
@@ -697,7 +697,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
                         } catch (error) {
                             console.error('Ошибка удаления чата:', error);
-                            showFlashMessage('Не удалось удалить чат', 'danger');
+                            showFlashMessage(`Не удалось удалить чат: ${error.message}`, 'danger');
                         }
                         chatOptionsDrawer.classList.remove('active');
                     });
@@ -781,7 +781,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 } catch (error) {
                     console.error('Ошибка создания группы:', error);
-                    showFlashMessage('Не удалось создать группу, попробуйте снова', 'danger');
+                    showFlashMessage(`Не удалось создать группу: ${error.message}`, 'danger');
                 }
             });
         }
@@ -796,13 +796,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
                 try {
+                    console.log('Поиск участников для группы:', query);
                     const response = await fetch(`/users/search?query=${encodeURIComponent(query)}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (!response.ok) {
-                        throw new Error(`Поиск не удался: ${response.status}`);
+                        const errorText = await response.text();
+                        throw new Error(`Поиск не удался: ${response.status} (${errorText})`);
                     }
                     const users = await response.json();
+                    console.log('Найденные пользователи для группы:', users);
                     groupMembersSearchResults.innerHTML = '';
                     if (users.length === 0) {
                         groupMembersSearchResults.innerHTML = '<div class="search-result-item">Пользователи не найдены</div>';
@@ -831,8 +834,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     groupMembersSearchResults.classList.add('active');
                 } catch (error) {
-                    console.error('Ошибка поиска:', error);
-                    showFlashMessage('Не удалось найти пользователей', 'danger');
+                    console.error('Ошибка поиска участников для группы:', error);
+                    showFlashMessage(`Ошибка поиска участников: ${error.message}`, 'danger');
                 }
             });
         }
@@ -851,9 +854,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const recentChats = await response.json();
                 console.log('Недавние чаты:', recentChats);
                 chatList.innerHTML = '';
-                recentChats.forEach(chat => {
-                    addChatToList(chat.user_id, chat.group_id, chat.username, chat.avatar_url, chat.unread_count, chat.is_group);
-                });
+                if (recentChats.length === 0) {
+                    chatList.innerHTML = '<div class="group-item">Нет недавних чатов</div>';
+                } else {
+                    recentChats.forEach(chat => {
+                        addChatToList(chat.user_id, chat.group_id, chat.username, chat.avatar_url, chat.unread_count, chat.is_group);
+                    });
+                }
             } catch (error) {
                 console.error('Ошибка загрузки недавних чатов:', error);
                 showFlashMessage(`Не удалось загрузить недавние чаты: ${error.message}`, 'danger');
@@ -1047,7 +1054,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             addChatToList(null, groupId, message.username, message.avatar_url, 0, true);
                         } else {
                             if (senderId !== currentChatUserId) {
-                                const chatItem = document.querySelector(`.group-item[data-id="${senderId}"][data-is-group="false"]`);
+                                const chatItem = document.querySelector(`.group-item[data-id="${senderId}"][data(CONFIG_FILE_PATH="/home/user/project/config.ini")-is-group="false"]`);
                                 let currentCount = 0;
                                 if (chatItem) {
                                     const counter = chatItem.querySelector('.unread-count');
@@ -1075,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             } catch (error) {
                 console.error('Ошибка инициализации WebSocket:', error);
-                showFlashMessage('Не удалось инициализировать чат, попробуйте снова', 'danger');
+                showFlashMessage(`Не удалось инициализировать чат: ${error.message}`, 'danger');
             }
         }
 
@@ -1105,7 +1112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updateUnreadDivider();
             } catch (error) {
                 console.error('Ошибка загрузки сообщений:', error);
-                showFlashMessage('Не удалось загрузить сообщения', 'danger');
+                showFlashMessage(`Не удалось загрузить сообщения: ${error.message}`, 'danger');
             }
         }
 
@@ -1216,7 +1223,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (!response.ok) {
-                        throw new Error(`Поиск не удался: ${response.status}`);
+                        const errorText = await response.text();
+                        throw new Error(`Поиск не удался: ${response.status} (${errorText})`);
                     }
                     const users = await response.json();
                     console.log('Результаты поиска:', users);
@@ -1250,7 +1258,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     searchResults.classList.add('active');
                 } catch (error) {
                     console.error('Ошибка поиска:', error);
-                    showFlashMessage('Не удалось найти пользователей', 'danger');
+                    showFlashMessage(`Ошибка поиска пользователей: ${error.message}`, 'danger');
                 }
             });
         }
