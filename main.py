@@ -12,6 +12,13 @@ from pydantic import BaseModel
 import json
 import os
 import shutil
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
@@ -23,9 +30,16 @@ AVATARS_DIR = "static/avatars"
 if not os.path.exists(AVATARS_DIR):
     os.makedirs(AVATARS_DIR)
 
+# SMTP Configuration
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_USER = "tynybekovjanyshbek@gmail.com"
+SMTP_PASSWORD = "icbvlisqskeunccq"
+
 SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+RESET_TOKEN_EXPIRE_MINUTES = 60  # Password reset token valid for 60 minutes   
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
@@ -65,22 +79,22 @@ class RecentChat(BaseModel):
 
 class GroupCreate(BaseModel):
     name: str
-    description: str | None = None  # Добавляем описание
+    description: str | None = None
     member_ids: List[int]
 
 class Group(BaseModel):
     id: int
     name: str
-    description: str | None = None  # Добавляем описание
-    avatar_url: str | None = None   # Добавляем фото группы
+    description: str | None = None
+    avatar_url: str | None = None
     creator_id: int
     created_at: str
 
 class GroupInfo(BaseModel):
     id: int
     name: str
-    description: str | None = None  # Добавляем описание
-    avatar_url: str | None = None   # Добавляем фото группы
+    description: str | None = None
+    avatar_url: str | None = None
     creator: dict
     members: List[dict]
 
@@ -116,8 +130,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS groups (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            description TEXT,  -- Добавляем поле description
-            avatar_url TEXT,   -- Добавляем поле avatar_url
+            description TEXT,
+            avatar_url TEXT,
             creator_id INTEGER,
             created_at TEXT NOT NULL,
             FOREIGN KEY (creator_id) REFERENCES users(id)
@@ -129,6 +143,14 @@ def init_db():
             user_id INTEGER,
             PRIMARY KEY (group_id, user_id),
             FOREIGN KEY (group_id) REFERENCES groups(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER,
+            expires_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
@@ -167,6 +189,54 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+def create_reset_token(user_id: int):
+    token = str(uuid.uuid4())
+    expires_at = (datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)).isoformat()
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
+        (token, user_id, expires_at)
+    )
+    conn.commit()
+    conn.close()
+    return token
+
+def send_reset_email(email: str, reset_link: str):
+    # Create the email message
+    msg = MIMEMultipart()
+    msg['From'] = SMTP_USER
+    msg['To'] = email
+    msg['Subject'] = "Сброс пароля для вашей учетной записи"
+
+    body = f"""
+    Здравствуйте,
+
+    Вы запросили сброс пароля для вашей учетной записи. Пожалуйста, перейдите по следующей ссылке, чтобы сбросить пароль:
+
+    {reset_link}
+
+    Ссылка действительна в течение {RESET_TOKEN_EXPIRE_MINUTES} минут. Если вы не запрашивали сброс пароля, проигнорируйте это письмо.
+
+    С уважением,
+    Команда приложения
+    """
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        # Connect to the SMTP server
+        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+        server.starttls()  # Enable TLS
+        server.login(SMTP_USER, SMTP_PASSWORD)
+
+        # Send the email
+        server.sendmail(SMTP_USER, email, msg.as_string())
+        server.quit()
+        print(f"Email успешно отправлен на {email} с ссылкой: {reset_link}")
+    except Exception as e:
+        print(f"Ошибка отправки email: {e}")
+        raise HTTPException(status_code=500, detail=f"Не удалось отправить email: {str(e)}")
 
 async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -215,6 +285,95 @@ async def get_signup():
     with open("signup.html", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def get_forgot_password():
+    with open("forgot-password.html", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+@app.post("/forgot-password")
+async def forgot_password(email: str = Form(...)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Пользователь с таким email не найден")
+    
+    user_id = user[0]
+    reset_token = create_reset_token(user_id)
+    reset_link = f"http://localhost:8000/reset-password?token={reset_token}"
+    
+    # Send the reset link via email
+    send_reset_email(email, reset_link)
+    
+    conn.close()
+    return {"message": "Ссылка для сброса пароля отправлена на ваш email"}
+
+@app.get("/reset-password", response_class=HTMLResponse)
+async def get_reset_password(request: Request):
+    token = request.query_params.get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Токен для сброса пароля отсутствует")
+    
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", (token,))
+    token_data = cursor.fetchone()
+    if not token_data:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Недействительный токен для сброса пароля")
+    
+    user_id, expires_at = token_data
+    expires_at = datetime.fromisoformat(expires_at)
+    if datetime.utcnow() > expires_at:
+        cursor.execute("DELETE FROM password_reset_tokens WHERE token = ?", (token,))
+        conn.commit()
+        conn.close()
+        raise HTTPException(status_code=400, detail="Срок действия токена истёк")
+    
+    conn.close()
+    with open("reset-password.html", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+@app.post("/reset-password")
+async def reset_password(
+    token: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...)
+):
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="Пароли не совпадают")
+    
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Пароль должен содержать минимум 6 символов")
+
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", (token,))
+    token_data = cursor.fetchone()
+    if not token_data:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Недействительный токен для сброса пароля")
+    
+    user_id, expires_at = token_data
+    expires_at = datetime.fromisoformat(expires_at)
+    if datetime.utcnow() > expires_at:
+        cursor.execute("DELETE FROM password_reset_tokens WHERE token = ?", (token,))
+        conn.commit()
+        conn.close()
+        raise HTTPException(status_code=400, detail="Срок действия токена истёк")
+    
+    hashed_password = get_password_hash(new_password)
+    cursor.execute(
+        "UPDATE users SET hashed_password = ? WHERE id = ?",
+        (hashed_password, user_id)
+    )
+    cursor.execute("DELETE FROM password_reset_tokens WHERE token = ?", (token,))
+    conn.commit()
+    conn.close()
+    return {"message": "Пароль успешно сброшен"}
+
 @app.get("/chat", response_class=HTMLResponse)
 async def get_chat(request: Request, current_user: dict = Depends(get_current_user)):
     with open("chat.html", encoding="utf-8") as f:
@@ -251,7 +410,7 @@ async def search_users(
     query: str = Query(..., min_length=2, description="Search query for users"),
     current_user: dict = Depends(get_current_user)
 ):
-    print(f"Received search query: {query}")  # Отладка
+    print(f"Received search query: {query}")
     if len(query.strip()) < 2:
         raise HTTPException(status_code=422, detail="Query must be at least 2 characters long")
     conn = sqlite3.connect("chat.db")
@@ -261,7 +420,7 @@ async def search_users(
         (f"%{query}%", current_user["id"])
     )
     users = [{"id": user[0], "username": user[1]} for user in cursor.fetchall()]
-    print(f"Found users: {users}")  # Отладка
+    print(f"Found users: {users}")
     conn.close()
     return users
 
@@ -374,15 +533,14 @@ async def signup(user: User):
 @app.post("/groups")
 async def create_group(
     name: str = Form(...),
-    description: str = Form(None),  # Добавляем описание
-    member_ids: str = Form(...),    # Ожидаем строку с JSON-массивом
-    avatar: UploadFile = File(None),  # Добавляем загрузку фото
+    description: str = Form(None),
+    member_ids: str = Form(...),
+    avatar: UploadFile = File(None),
     current_user: dict = Depends(get_current_user)
 ):
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Парсим member_ids из строки JSON
         try:
             member_ids_list = json.loads(member_ids)
             if not isinstance(member_ids_list, list):
@@ -397,7 +555,6 @@ async def create_group(
         if len(existing_users) != len(member_ids_list):
             raise HTTPException(status_code=400, detail="One or more user IDs are invalid")
 
-        # Сохраняем фото группы, если оно загружено
         avatar_url = None
         if avatar:
             if avatar.content_type not in ["image/jpeg", "image/png"]:
@@ -469,7 +626,6 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Проверяем, является ли текущий пользователь создателем группы
         cursor.execute(
             "SELECT creator_id FROM groups WHERE id = ?",
             (group_id,)
@@ -480,12 +636,10 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
         if group[0] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Only the group creator can add members")
 
-        # Проверяем, существует ли пользователь
         cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Проверяем, не является ли пользователь уже участником группы
         cursor.execute(
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
@@ -493,7 +647,6 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="User is already a member of this group")
 
-        # Добавляем пользователя в группу
         cursor.execute(
             "INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
             (group_id, user_id)
@@ -511,7 +664,6 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Проверяем, является ли текущий пользователь создателем группы
         cursor.execute(
             "SELECT creator_id FROM groups WHERE id = ?",
             (group_id,)
@@ -522,11 +674,9 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
         if group[0] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Only the group creator can remove members")
 
-        # Нельзя удалить самого создателя
         if user_id == current_user["id"]:
             raise HTTPException(status_code=400, detail="Creator cannot remove themselves")
 
-        # Проверяем, является ли пользователь участником группы
         cursor.execute(
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
@@ -534,12 +684,10 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
         if not cursor.fetchone():
             raise HTTPException(status_code=400, detail="User is not a member of this group")
 
-        # Удаляем пользователя из группы
         cursor.execute(
             "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
         )
-        # Удаляем сообщения пользователя в этой группе
         cursor.execute(
             "DELETE FROM messages WHERE group_id = ? AND sender_id = ?",
             (group_id, user_id)
@@ -581,7 +729,9 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, current_user["id"])
         )
-        if not cursor.fetchone():
+        membership = cursor.fetchone()
+        print(f"Проверка членства: group_id={group_id}, user_id={current_user['id']}, result={membership}")
+        if not membership:
             raise HTTPException(status_code=403, detail="Not a member of this group")
 
         cursor.execute(
@@ -593,6 +743,7 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             (group_id,)
         )
         group = cursor.fetchone()
+        print(f"Группа: {group}")
         if not group:
             raise HTTPException(status_code=404, detail="Group not found")
 
@@ -601,6 +752,7 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             (group[4],)
         )
         creator = cursor.fetchone()
+        print(f"Создатель: {creator}")
         if not creator:
             raise HTTPException(status_code=404, detail="Creator not found")
 
@@ -617,6 +769,14 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             {"id": row[0], "username": row[1], "avatar_url": row[2]}
             for row in cursor.fetchall()
         ]
+        print(f"Участники группы {group_id}: {members}")
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM group_members WHERE group_id = ?",
+            (group_id,)
+        )
+        member_count = cursor.fetchone()[0]
+        print(f"Количество участников группы {group_id}: {member_count}")
 
         conn.close()
         return {
@@ -625,7 +785,8 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             "description": group[2],
             "avatar_url": group[3],
             "creator": {"id": creator[0], "username": creator[1], "avatar_url": creator[2]},
-            "members": members
+            "members": members,
+            "member_count": member_count
         }
     except Exception as e:
         conn.close()

@@ -34,6 +34,8 @@
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    max-height: 80vh; /* Ограничим максимальную высоту модального окна */
+    overflow-y: auto; /* Добавим прокрутку для модального окна */
 }
 
 .modal-content:hover {
@@ -99,9 +101,8 @@
 }
 
 .group-members-list {
-    max-height: 150px;
-    overflow-y: auto;
     margin-bottom: 15px;
+    overflow-y: visible; /* Убираем прокрутку внутри списка */
 }
 
 .group-member-item {
@@ -175,8 +176,8 @@
 }
 
 .group-info-row #group-members {
-    max-height: 200px;
-    overflow-y: auto;
+    max-height: none; /* Убираем ограничение высоты для контейнера участников */
+    overflow-y: visible; /* Убираем прокрутку */
     width: 100%;
 }
 

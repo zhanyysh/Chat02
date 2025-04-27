@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         try {
-            console.log('Отправляю запрос на /signup с данными:', data);
+            console.log('Отправляю запрос на /signup PRIME с данными:', data);
             const response = await fetch('/signup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -226,6 +226,81 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Ошибка регистрации:', error);
             showFlashMessage(`Не удалось зарегистрироваться: ${error.message}`, 'danger');
         }
+    }
+
+    // Обработка формы "Забыли пароль"
+    const forgotPasswordForm = document.getElementById('forgot-password-form');
+    if (forgotPasswordForm) {
+        forgotPasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Форма "Забыли пароль" отправлена');
+            const formData = new FormData(forgotPasswordForm);
+            try {
+                console.log('Отправляю запрос на /forgot-password');
+                const response = await fetch('/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams(formData)
+                });
+                console.log('Получен ответ от /forgot-password:', response.status);
+                const result = await response.json();
+                console.log('Результат:', result);
+                if (response.ok) {
+                    showFlashMessage('Ссылка для сброса пароля отправлена на ваш email', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                } else {
+                    showFlashMessage(result.detail, 'danger');
+                }
+            } catch (error) {
+                console.error('Ошибка запроса сброса пароля:', error);
+                showFlashMessage('Не удалось отправить запрос, попробуйте снова', 'danger');
+            }
+        });
+    }
+
+    // Обработка формы сброса пароля
+    const resetPasswordForm = document.getElementById('reset-password-form');
+    if (resetPasswordForm) {
+        resetPasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Форма сброса пароля отправлена');
+            const formData = new FormData(resetPasswordForm);
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            if (!token) {
+                showFlashMessage('Токен отсутствует, запросите новую ссылку', 'danger');
+                return;
+            }
+            formData.append('token', token);
+            const data = Object.fromEntries(formData);
+            if (data.new_password !== data.confirm_password) {
+                showFlashMessage('Пароли не совпадают', 'danger');
+                return;
+            }
+            try {
+                console.log('Отправляю запрос на /reset-password');
+                const response = await fetch('/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams(formData)
+                });
+                console.log('Получен ответ от /reset-password:', response.status);
+                const result = await response.json();
+                if (response.ok) {
+                    showFlashMessage('Пароль успешно сброшен! Перенаправляю на вход...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                } else {
+                    showFlashMessage(result.detail, 'danger');
+                }
+            } catch (error) {
+                console.error('Ошибка сброса пароля:', error);
+                showFlashMessage('Не удалось сбросить пароль, попробуйте снова', 'danger');
+            }
+        });
     }
 
     // Загрузка профиля текущего пользователя
@@ -565,10 +640,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     infoBtn.textContent = 'Инфо о группе';
                     infoBtn.addEventListener('click', async () => {
                         try {
+                            console.log('Запрос информации о группе:', currentGroupId);
                             const response = await fetch(`/groups/${currentGroupId}/info`, {
                                 headers: { 'Authorization': `Bearer ${token}` }
                             });
                             const groupInfo = await response.json();
+                            console.log('Полученные данные о группе:', groupInfo);
+                    
                             if (response.ok) {
                                 groupInfoTitle.textContent = groupInfo.name;
                                 groupDescription.textContent = groupInfo.description || 'Нет описания';
@@ -586,75 +664,85 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 groupCreator.addEventListener('click', () => {
                                     window.location.href = `/profile/${groupInfo.creator.id}?token=${encodeURIComponent(token)}`;
                                 });
-
-                                groupMembersCount.textContent = groupInfo.members.length;
+                    
+                                groupMembersCount.textContent = groupInfo.member_count || groupInfo.members.length;
                                 groupMembers.innerHTML = '';
-                                groupInfo.members.forEach(member => {
-                                    const memberDiv = document.createElement('div');
-                                    memberDiv.className = 'group-member-item';
-                                    memberDiv.dataset.userId = member.id;
-                                    memberDiv.innerHTML = `
-                                        <div class="group-member">
-                                            <div class="avatar">
-                                                ${member.avatar_url 
-                                                    ? `<img src="${member.avatar_url}" alt="${member.username}">`
-                                                    : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                        <rect width="24" height="24" rx="12" fill="#1E90FF"/>
-                                                        <circle cx="12" cy="8" r="4" fill="white"/>
-                                                        <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
-                                                    </svg>`
-                                                }
-                                            </div>
-                                            <div class="username">${member.username}</div>
-                                        </div>
-                                    `;
-                                    // Добавляем кнопку удаления для администратора
-                                    if (groupInfo.creator.id === currentUserId && member.id !== currentUserId) {
-                                        const removeBtn = document.createElement('button');
-                                        removeBtn.className = 'remove-btn';
-                                        removeBtn.textContent = 'Удалить';
-                                        removeBtn.addEventListener('click', async (e) => {
-                                            e.stopPropagation(); // Предотвращаем переход в профиль
-                                            if (confirm(`Вы уверены, что хотите удалить ${member.username} из группы?`)) {
-                                                try {
-                                                    const response = await fetch(`/groups/${currentGroupId}/remove-member`, {
-                                                        method: 'POST',
-                                                        headers: {
-                                                            'Content-Type': 'application/x-www-form-urlencoded',
-                                                            'Authorization': `Bearer ${token}`
-                                                        },
-                                                        body: new URLSearchParams({ user_id: member.id })
-                                                    });
-                                                    const result = await response.json();
-                                                    if (response.ok) {
-                                                        showFlashMessage('Пользователь удалён из группы', 'success');
-                                                        memberDiv.remove();
-                                                        groupMembersCount.textContent = parseInt(groupMembersCount.textContent) - 1;
-                                                    } else {
-                                                        showFlashMessage(result.detail, 'danger');
+                                if (!groupInfo.members || groupInfo.members.length === 0) {
+                                    console.log('Список участников пуст');
+                                    const noMembersDiv = document.createElement('div');
+                                    noMembersDiv.className = 'group-member-item';
+                                    noMembersDiv.textContent = 'Нет участников';
+                                    groupMembers.appendChild(noMembersDiv);
+                                } else {
+                                    console.log('Рендерим участников:', groupInfo.members);
+                                    groupInfo.members.forEach(member => {
+                                        console.log('Добавляю участника:', member.username);
+                                        const memberDiv = document.createElement('div');
+                                        memberDiv.className = 'group-member-item';
+                                        memberDiv.dataset.userId = member.id;
+                                        memberDiv.innerHTML = `
+                                            <div class="group-member">
+                                                <div class="avatar">
+                                                    ${member.avatar_url 
+                                                        ? `<img src="${member.avatar_url}" alt="${member.username}">`
+                                                        : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <rect width="24" height="24" rx="12" fill="#1E90FF"/>
+                                                            <circle cx="12" cy="8" r="4" fill="white"/>
+                                                            <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
+                                                        </svg>`
                                                     }
-                                                } catch (error) {
-                                                    console.error('Ошибка удаления участника:', error);
-                                                    showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
+                                                </div>
+                                                <span class="username">${member.username}</span>
+                                            </div>
+                                        `;
+                                        if (groupInfo.creator.id === currentUserId && member.id !== currentUserId) {
+                                            const removeBtn = document.createElement('button');
+                                            removeBtn.className = 'remove-btn';
+                                            removeBtn.textContent = 'Удалить';
+                                            removeBtn.addEventListener('click', async (e) => {
+                                                e.stopPropagation();
+                                                if (confirm(`Вы уверены, что хотите удалить ${member.username} из группы?`)) {
+                                                    try {
+                                                        const response = await fetch(`/groups/${currentGroupId}/remove-member`, {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/x-www-form-urlencoded',
+                                                                'Authorization': `Bearer ${token}`
+                                                            },
+                                                            body: new URLSearchParams({ user_id: member.id })
+                                                        });
+                                                        const result = await response.json();
+                                                        if (response.ok) {
+                                                            showFlashMessage('Пользователь удалён из группы', 'success');
+                                                            memberDiv.remove();
+                                                            groupMembersCount.textContent = parseInt(groupMembersCount.textContent) - 1;
+                                                        } else {
+                                                            showFlashMessage(result.detail, 'danger');
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('Ошибка удаления участника:', error);
+                                                        showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
+                                                    }
                                                 }
-                                            }
+                                            });
+                                            memberDiv.appendChild(removeBtn);
+                                        }
+                                        memberDiv.querySelector('.group-member').addEventListener('click', () => {
+                                            window.location.href = `/profile/${member.id}?token=${encodeURIComponent(token)}`;
                                         });
-                                        memberDiv.appendChild(removeBtn);
-                                    }
-                                    memberDiv.querySelector('.group-member').addEventListener('click', () => {
-                                        window.location.href = `/profile/${member.id}?token=${encodeURIComponent(token)}`;
+                                        groupMembers.appendChild(memberDiv);
+                                        console.log('Элемент добавлен в DOM:', memberDiv);
                                     });
-                                    groupMembers.appendChild(memberDiv);
-                                });
-
-                                // Показываем элементы управления для администратора
+                                    console.log('Список участников после рендеринга:', groupMembers.innerHTML);
+                                }
+                    
                                 const adminSection = document.querySelector('.admin-only');
                                 if (groupInfo.creator.id === currentUserId) {
                                     adminSection.style.display = 'flex';
                                 } else {
                                     adminSection.style.display = 'none';
                                 }
-
+                    
                                 groupInfoModal.style.display = 'block';
                             } else {
                                 showFlashMessage(groupInfo.detail, 'danger');
@@ -1109,7 +1197,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : ''}
                 `;
                 chatItem.appendChild(infoDiv);
-
                 chatItem.addEventListener('click', async () => {
                     if (currentChatUserId || currentGroupId) {
                         await markMessagesAsRead(currentChatUserId, currentGroupId);
@@ -1120,6 +1207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     currentChatUserId = isGroup ? null : userId;
                     currentGroupId = isGroup ? groupId : null;
+                    console.log('Выбрана группа:', { currentGroupId, username });
                     document.querySelectorAll('.group-item').forEach(item => item.classList.remove('active'));
                     chatItem.classList.add('active');
                     document.getElementById('chat-title').textContent = username;
