@@ -56,6 +56,12 @@
                     <input type="text" id="group-name" name="group-name" placeholder="Название группы" required>
                 </div>
                 <div class="form-group">
+                    <input type="text" id="group-description" name="group-description" placeholder="Описание группы">
+                </div>
+                <div class="form-group">
+                    <input type="file" id="group-avatar" name="group-avatar" accept="image/*">
+                </div>
+                <div class="form-group">
                     <div class="group-members-container">
                         <input type="text" id="group-members" name="group-members" placeholder="Добавить участников">
                         <div id="group-members-search-results" class="search-results"></div>
@@ -69,20 +75,46 @@
     <div id="group-info-modal" class="modal">
         <div class="modal-content">
             <button id="close-group-info-btn" class="close-modal-btn">×</button>
-            <h2 id="group-info-title">Информация о группе</h2>
+            <div class="profile-header">
+                <div class="avatar">
+                    <svg id="group-avatar-svg" width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="24" height="24" rx="12" fill="#1E90FF"/>
+                        <circle cx="12" cy="8" r="4" fill="white"/>
+                        <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
+                    </svg>
+                    <img id="group-avatar-img" src="" alt="Group Avatar" style="display: none;">
+                </div>
+                <div class="status">
+                    <h2 class="username" id="group-info-title">Информация о группе</h2>
+                </div>
+            </div>
             <div class="group-info-details">
                 <div class="group-info-row">
+                    <span class="label">Описание:</span>
+                    <span class="value" id="group-description">Нет описания</span>
+                </div>
+                <div class="group-info-row">
                     <span class="label">Создатель:</span>
-                    <span class="value" id="group-creator"></span>
+                    <span class="value clickable" id="group-creator"></span>
+                </div>
+                <div class="group-info-row">
+                    <span class="label">Количество участников:</span>
+                    <span class="value" id="group-members-count">0</span>
                 </div>
                 <div class="group-info-row">
                     <span class="label">Участники:</span>
-                    <div id="group-members"></div>
+                    <div id="group-members" class="group-members-list"></div>
+                </div>
+                <div class="group-info-row admin-only" style="display: none;">
+                    <span class="label">Добавить участника:</span>
+                    <div class="group-members-container">
+                        <input type="text" id="add-group-member" placeholder="Поиск пользователя">
+                        <div id="add-group-member-results" class="search-results"></div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <script src="/static/script.js"></script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'933560a98930672e',t:'MTc0NTE1OTgyNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9360c2eb4ecec3ec',t:'MTc0NTYxNDczNy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>

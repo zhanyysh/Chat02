@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.location.href = '/';
             return;
         }
-
+    
         fetch('/users/me', {
             headers: { 'Authorization': `Bearer ${token}` }
         })
@@ -380,17 +380,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             localStorage.removeItem('token');
             window.location.href = '/';
         });
-
+    
         const avatarUpload = document.getElementById('avatar-upload');
         const changeAvatarBtn = document.getElementById('change-avatar-btn');
         const avatarImg = document.getElementById('avatar-img');
         const avatarSvg = document.getElementById('avatar-svg');
-
+    
         if (changeAvatarBtn && avatarUpload) {
             changeAvatarBtn.addEventListener('click', () => {
                 avatarUpload.click();
             });
-
+    
             avatarUpload.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -404,17 +404,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         }
-
+    
         const editProfileForm = document.getElementById('edit-profile-form');
         if (editProfileForm) {
             editProfileForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 console.log('Форма редактирования профиля отправлена');
+    
                 const formData = new FormData(editProfileForm);
+                const dateOfBirth = formData.get('date_of_birth');
+    
+                // Преобразуем дату из ДД.ММ.ГГГГ в YYYY-MM-DD, если она введена в таком формате
+                if (dateOfBirth && /^\d{2}\.\d{2}\.\d{4}$/.test(dateOfBirth)) {
+                    console.log(`Преобразую дату из ${dateOfBirth}`);
+                    const [day, month, year] = dateOfBirth.split('.');
+                    const transformedDate = `${year}-${month}-${day}`;
+                    formData.set('date_of_birth', transformedDate);
+                    console.log(`Дата преобразована в ${transformedDate}`);
+                }
+    
                 if (avatarUpload.files[0]) {
                     formData.append('avatar', avatarUpload.files[0]);
                 }
-
+    
                 try {
                     console.log('Отправляю PUT-запрос на /users/me');
                     const response = await fetch('/users/me', {
@@ -439,7 +451,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         }
-
+    
         const backBtn = document.getElementById('back-btn');
         const closeBtn = document.getElementById('close-btn');
         if (backBtn) {
@@ -483,15 +495,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const createGroupModal = document.getElementById('create-group-modal');
         const createGroupForm = document.getElementById('create-group-form');
         const groupNameInput = document.getElementById('group-name');
+        const groupDescriptionInput = document.getElementById('group-description');
+        const groupAvatarInput = document.getElementById('group-avatar');
         const groupMembersInput = document.getElementById('group-members');
         const groupMembersList = document.getElementById('group-members-list');
         const groupMembersSearchResults = document.getElementById('group-members-search-results');
         const closeModalBtn = document.getElementById('close-modal-btn');
         const groupInfoModal = document.getElementById('group-info-modal');
         const groupInfoTitle = document.getElementById('group-info-title');
+        const groupDescription = document.getElementById('group-description');
+        const groupAvatarImg = document.getElementById('group-avatar-img');
+        const groupAvatarSvg = document.getElementById('group-avatar-svg');
         const groupCreator = document.getElementById('group-creator');
+        const groupMembersCount = document.getElementById('group-members-count');
         const groupMembers = document.getElementById('group-members');
         const closeGroupInfoBtn = document.getElementById('close-group-info-btn');
+        const addGroupMemberInput = document.getElementById('add-group-member');
+        const addGroupMemberResults = document.getElementById('add-group-member-results');
 
         if (menuIcon && menuDrawer) {
             menuIcon.addEventListener('click', () => {
@@ -551,6 +571,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const groupInfo = await response.json();
                             if (response.ok) {
                                 groupInfoTitle.textContent = groupInfo.name;
+                                groupDescription.textContent = groupInfo.description || 'Нет описания';
+                                if (groupInfo.avatar_url) {
+                                    groupAvatarImg.src = groupInfo.avatar_url;
+                                    groupAvatarImg.style.display = 'block';
+                                    groupAvatarSvg.style.display = 'none';
+                                } else {
+                                    groupAvatarImg.style.display = 'none';
+                                    groupAvatarSvg.style.display = 'block';
+                                }
                                 groupCreator.textContent = groupInfo.creator.username;
                                 groupCreator.dataset.userId = groupInfo.creator.id;
                                 groupCreator.className = 'value clickable';
@@ -558,29 +587,73 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     window.location.href = `/profile/${groupInfo.creator.id}?token=${encodeURIComponent(token)}`;
                                 });
 
+                                groupMembersCount.textContent = groupInfo.members.length;
                                 groupMembers.innerHTML = '';
                                 groupInfo.members.forEach(member => {
                                     const memberDiv = document.createElement('div');
-                                    memberDiv.className = 'group-member';
-                                    memberDiv.innerHTML = `
-                                        <div class="avatar">
-                                            ${member.avatar_url 
-                                                ? `<img src="${member.avatar_url}" alt="${member.username}">`
-                                                : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                    <rect width="24" height="24" rx="12" fill="#1E90FF"/>
-                                                    <circle cx="12" cy="8" r="4" fill="white"/>
-                                                    <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
-                                                </svg>`
-                                            }
-                                        </div>
-                                        <div class="username">${member.username}</div>
-                                    `;
+                                    memberDiv.className = 'group-member-item';
                                     memberDiv.dataset.userId = member.id;
-                                    memberDiv.addEventListener('click', () => {
+                                    memberDiv.innerHTML = `
+                                        <div class="group-member">
+                                            <div class="avatar">
+                                                ${member.avatar_url 
+                                                    ? `<img src="${member.avatar_url}" alt="${member.username}">`
+                                                    : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <rect width="24" height="24" rx="12" fill="#1E90FF"/>
+                                                        <circle cx="12" cy="8" r="4" fill="white"/>
+                                                        <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
+                                                    </svg>`
+                                                }
+                                            </div>
+                                            <div class="username">${member.username}</div>
+                                        </div>
+                                    `;
+                                    // Добавляем кнопку удаления для администратора
+                                    if (groupInfo.creator.id === currentUserId && member.id !== currentUserId) {
+                                        const removeBtn = document.createElement('button');
+                                        removeBtn.className = 'remove-btn';
+                                        removeBtn.textContent = 'Удалить';
+                                        removeBtn.addEventListener('click', async (e) => {
+                                            e.stopPropagation(); // Предотвращаем переход в профиль
+                                            if (confirm(`Вы уверены, что хотите удалить ${member.username} из группы?`)) {
+                                                try {
+                                                    const response = await fetch(`/groups/${currentGroupId}/remove-member`, {
+                                                        method: 'POST',
+                                                        headers: {
+                                                            'Content-Type': 'application/x-www-form-urlencoded',
+                                                            'Authorization': `Bearer ${token}`
+                                                        },
+                                                        body: new URLSearchParams({ user_id: member.id })
+                                                    });
+                                                    const result = await response.json();
+                                                    if (response.ok) {
+                                                        showFlashMessage('Пользователь удалён из группы', 'success');
+                                                        memberDiv.remove();
+                                                        groupMembersCount.textContent = parseInt(groupMembersCount.textContent) - 1;
+                                                    } else {
+                                                        showFlashMessage(result.detail, 'danger');
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Ошибка удаления участника:', error);
+                                                    showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
+                                                }
+                                            }
+                                        });
+                                        memberDiv.appendChild(removeBtn);
+                                    }
+                                    memberDiv.querySelector('.group-member').addEventListener('click', () => {
                                         window.location.href = `/profile/${member.id}?token=${encodeURIComponent(token)}`;
                                     });
                                     groupMembers.appendChild(memberDiv);
                                 });
+
+                                // Показываем элементы управления для администратора
+                                const adminSection = document.querySelector('.admin-only');
+                                if (groupInfo.creator.id === currentUserId) {
+                                    adminSection.style.display = 'flex';
+                                } else {
+                                    adminSection.style.display = 'none';
+                                }
 
                                 groupInfoModal.style.display = 'block';
                             } else {
@@ -720,6 +793,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log('Нажата кнопка закрытия модального окна');
                 createGroupModal.style.display = 'none';
                 groupNameInput.value = '';
+                groupDescriptionInput.value = '';
+                groupAvatarInput.value = '';
                 groupMembersInput.value = '';
                 groupMembersList.innerHTML = '';
                 groupMembersSearchResults.innerHTML = '';
@@ -739,6 +814,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 e.preventDefault();
                 console.log('Форма создания группы отправлена');
                 const groupName = groupNameInput.value.trim();
+                const groupDescription = groupDescriptionInput.value.trim();
+                const groupAvatar = groupAvatarInput.files[0];
                 const memberIds = Array.from(groupMembersList.children).map(item => parseInt(item.dataset.userId));
                 if (!groupName || groupName.length < 3) {
                     showFlashMessage('Название группы должно содержать минимум 3 символа', 'danger');
@@ -748,20 +825,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                     showFlashMessage('Выберите хотя бы одного участника', 'danger');
                     return;
                 }
+                const formData = new FormData();
+                formData.append('name', groupName);
+                formData.append('description', groupDescription);
+                formData.append('member_ids', JSON.stringify(memberIds));
+                if (groupAvatar) {
+                    formData.append('avatar', groupAvatar);
+                }
                 try {
                     const response = await fetch('/groups', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`
                         },
-                        body: JSON.stringify({ name: groupName, member_ids: memberIds })
+                        body: formData
                     });
                     const result = await response.json();
                     if (response.ok) {
                         showFlashMessage('Группа успешно создана', 'success');
                         createGroupModal.style.display = 'none';
                         groupNameInput.value = '';
+                        groupDescriptionInput.value = '';
+                        groupAvatarInput.value = '';
                         groupMembersInput.value = '';
                         groupMembersList.innerHTML = '';
                         groupMembersSearchResults.innerHTML = '';
@@ -786,7 +871,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // Поиск пользователей для добавления в группу
+        // Поиск пользователей для добавления в группу (при создании группы)
         if (groupMembersInput) {
             groupMembersInput.addEventListener('input', async () => {
                 const query = groupMembersInput.value.trim();
@@ -836,6 +921,126 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } catch (error) {
                     console.error('Ошибка поиска участников для группы:', error);
                     showFlashMessage(`Ошибка поиска участников: ${error.message}`, 'danger');
+                }
+            });
+        }
+
+        // Поиск пользователей для добавления в существующую группу (для администратора)
+        if (addGroupMemberInput) {
+            addGroupMemberInput.addEventListener('input', async () => {
+                const query = addGroupMemberInput.value.trim();
+                if (query.length < 2) {
+                    addGroupMemberResults.classList.remove('active');
+                    addGroupMemberResults.innerHTML = '';
+                    return;
+                }
+                try {
+                    console.log('Поиск пользователей для добавления в группу:', query);
+                    const response = await fetch(`/users/search?query=${encodeURIComponent(query)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Поиск не удался: ${response.status} (${errorText})`);
+                    }
+                    const users = await response.json();
+                    console.log('Найденные пользователи:', users);
+                    addGroupMemberResults.innerHTML = '';
+                    if (users.length === 0) {
+                        addGroupMemberResults.innerHTML = '<div class="search-result-item">Пользователи не найдены</div>';
+                    } else {
+                        users.forEach(user => {
+                            // Проверяем, не является ли пользователь уже участником группы
+                            if (groupMembers.querySelector(`[data-user-id="${user.id}"]`)) {
+                                return;
+                            }
+                            const item = document.createElement('div');
+                            item.className = 'search-result-item';
+                            item.innerHTML = `
+                                <div class="avatar">${user.username[0].toUpperCase()}</div>
+                                <div class="username">${user.username}</div>
+                            `;
+                            item.addEventListener('click', async () => {
+                                try {
+                                    const response = await fetch(`/groups/${currentGroupId}/add-member`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/x-www-form-urlencoded',
+                                            'Authorization': `Bearer ${token}`
+                                        },
+                                        body: new URLSearchParams({ user_id: user.id })
+                                    });
+                                    const result = await response.json();
+                                    if (response.ok) {
+                                        showFlashMessage('Пользователь добавлен в группу', 'success');
+                                        // Добавляем нового участника в список
+                                        const memberDiv = document.createElement('div');
+                                        memberDiv.className = 'group-member-item';
+                                        memberDiv.dataset.userId = user.id;
+                                        memberDiv.innerHTML = `
+                                            <div class="group-member">
+                                                <div class="avatar">
+                                                    ${user.avatar_url 
+                                                        ? `<img src="${user.avatar_url}" alt="${user.username}">`
+                                                        : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <rect width="24" height="24" rx="12" fill="#1E90FF"/>
+                                                            <circle cx="12" cy="8" r="4" fill="white"/>
+                                                            <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
+                                                        </svg>`
+                                                    }
+                                                </div>
+                                                <div class="username">${user.username}</div>
+                                            </div>
+                                            <button class="remove-btn">Удалить</button>
+                                        `;
+                                        memberDiv.querySelector('.group-member').addEventListener('click', () => {
+                                            window.location.href = `/profile/${user.id}?token=${encodeURIComponent(token)}`;
+                                        });
+                                        memberDiv.querySelector('.remove-btn').addEventListener('click', async (e) => {
+                                            e.stopPropagation();
+                                            if (confirm(`Вы уверены, что хотите удалить ${user.username} из группы?`)) {
+                                                try {
+                                                    const response = await fetch(`/groups/${currentGroupId}/remove-member`, {
+                                                        method: 'POST',
+                                                        headers: {
+                                                            'Content-Type': 'application/x-www-form-urlencoded',
+                                                            'Authorization': `Bearer ${token}`
+                                                        },
+                                                        body: new URLSearchParams({ user_id: user.id })
+                                                    });
+                                                    const result = await response.json();
+                                                    if (response.ok) {
+                                                        showFlashMessage('Пользователь удалён из группы', 'success');
+                                                        memberDiv.remove();
+                                                        groupMembersCount.textContent = parseInt(groupMembersCount.textContent) - 1;
+                                                    } else {
+                                                        showFlashMessage(result.detail, 'danger');
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Ошибка удаления участника:', error);
+                                                    showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
+                                                }
+                                            }
+                                        });
+                                        groupMembers.appendChild(memberDiv);
+                                        groupMembersCount.textContent = parseInt(groupMembersCount.textContent) + 1;
+                                        addGroupMemberInput.value = '';
+                                        addGroupMemberResults.classList.remove('active');
+                                    } else {
+                                        showFlashMessage(result.detail, 'danger');
+                                    }
+                                } catch (error) {
+                                    console.error('Ошибка добавления участника:', error);
+                                    showFlashMessage(`Не удалось добавить участника: ${error.message}`, 'danger');
+                                }
+                            });
+                            addGroupMemberResults.appendChild(item);
+                        });
+                    }
+                    addGroupMemberResults.classList.add('active');
+                } catch (error) {
+                    console.error('Ошибка поиска пользователей:', error);
+                    showFlashMessage(`Ошибка поиска пользователей: ${error.message}`, 'danger');
                 }
             });
         }
@@ -1054,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             addChatToList(null, groupId, message.username, message.avatar_url, 0, true);
                         } else {
                             if (senderId !== currentChatUserId) {
-                                const chatItem = document.querySelector(`.group-item[data-id="${senderId}"][data(CONFIG_FILE_PATH="/home/user/project/config.ini")-is-group="false"]`);
+                                const chatItem = document.querySelector(`.group-item[data-id="${senderId}"][data-is-group="false"]`);
                                 let currentCount = 0;
                                 if (chatItem) {
                                     const counter = chatItem.querySelector('.unread-count');

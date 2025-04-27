@@ -65,17 +65,22 @@ class RecentChat(BaseModel):
 
 class GroupCreate(BaseModel):
     name: str
+    description: str | None = None  # Добавляем описание
     member_ids: List[int]
 
 class Group(BaseModel):
     id: int
     name: str
+    description: str | None = None  # Добавляем описание
+    avatar_url: str | None = None   # Добавляем фото группы
     creator_id: int
     created_at: str
 
 class GroupInfo(BaseModel):
     id: int
     name: str
+    description: str | None = None  # Добавляем описание
+    avatar_url: str | None = None   # Добавляем фото группы
     creator: dict
     members: List[dict]
 
@@ -111,6 +116,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS groups (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
+            description TEXT,  -- Добавляем поле description
+            avatar_url TEXT,   -- Добавляем поле avatar_url
             creator_id INTEGER,
             created_at TEXT NOT NULL,
             FOREIGN KEY (creator_id) REFERENCES users(id)
@@ -228,7 +235,6 @@ async def get_edit_profile(request: Request, current_user: dict = Depends(get_cu
     with open("edit-profile.html", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
-# Добавляем маршрут для favicon.ico
 @app.get("/favicon.ico", response_class=FileResponse)
 async def favicon():
     favicon_path = os.path.join("static", "favicon.ico")
@@ -240,7 +246,6 @@ async def favicon():
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     return current_user
 
-# Перемещаем маршрут /users/search выше /users/{user_id}
 @app.get("/users/search")
 async def search_users(
     query: str = Query(..., min_length=2, description="Search query for users"),
@@ -297,16 +302,22 @@ async def update_user(
     if mobile and not mobile.replace(" ", "").replace("-", "").replace("+", "").isdigit():
         conn.close()
         raise HTTPException(status_code=400, detail="Invalid phone number format")
+    
+    print(f"Received date_of_birth: {date_of_birth}")
+    
     if date_of_birth:
         try:
-            datetime.strptime(date_of_birth, "%Y-%m-dd")
-        except ValueError:
+            datetime.strptime(date_of_birth, "%Y-%m-%d")
+        except ValueError as e:
+            print(f"Date validation error: {e}")
             conn.close()
             raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD")
+    
     cursor.execute("SELECT id FROM users WHERE username = ? AND id != ?", (username, current_user['id']))
     if cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=400, detail="Username already taken")
+    
     avatar_url = current_user.get('avatar_url')
     if avatar:
         if avatar.content_type not in ["image/jpeg", "image/png"]:
@@ -317,6 +328,7 @@ async def update_user(
         with open(file_path, "wb") as f:
             shutil.copyfileobj(avatar.file, f)
         avatar_url = f"/static/avatars/{filename}"
+    
     cursor.execute(
         "UPDATE users SET username = ?, mobile = ?, date_of_birth = ?, avatar_url = ? WHERE id = ?",
         (username, mobile, date_of_birth, avatar_url, current_user['id'])
@@ -360,25 +372,51 @@ async def signup(user: User):
         conn.close()
 
 @app.post("/groups")
-async def create_group(group: GroupCreate, current_user: dict = Depends(get_current_user)):
+async def create_group(
+    name: str = Form(...),
+    description: str = Form(None),  # Добавляем описание
+    member_ids: str = Form(...),    # Ожидаем строку с JSON-массивом
+    avatar: UploadFile = File(None),  # Добавляем загрузку фото
+    current_user: dict = Depends(get_current_user)
+):
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        if not group.name or len(group.name) < 3:
+        # Парсим member_ids из строки JSON
+        try:
+            member_ids_list = json.loads(member_ids)
+            if not isinstance(member_ids_list, list):
+                raise ValueError("member_ids must be a list")
+        except (json.JSONDecodeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid member_ids format, must be a JSON list")
+
+        if not name or len(name) < 3:
             raise HTTPException(status_code=400, detail="Group name must be at least 3 characters long")
-        cursor.execute("SELECT id FROM users WHERE id IN ({})".format(','.join(['?']*len(group.member_ids))), group.member_ids)
+        cursor.execute("SELECT id FROM users WHERE id IN ({})".format(','.join(['?']*len(member_ids_list))), member_ids_list)
         existing_users = [row[0] for row in cursor.fetchall()]
-        if len(existing_users) != len(group.member_ids):
+        if len(existing_users) != len(member_ids_list):
             raise HTTPException(status_code=400, detail="One or more user IDs are invalid")
+
+        # Сохраняем фото группы, если оно загружено
+        avatar_url = None
+        if avatar:
+            if avatar.content_type not in ["image/jpeg", "image/png"]:
+                raise HTTPException(status_code=400, detail="Only JPEG or PNG images are allowed")
+            filename = f"group_{datetime.now().strftime('%Y%m%d%H%M%S')}_{avatar.filename}"
+            file_path = os.path.join(AVATARS_DIR, filename)
+            with open(file_path, "wb") as f:
+                shutil.copyfileobj(avatar.file, f)
+            avatar_url = f"/static/avatars/{filename}"
+
         cursor.execute(
-            "INSERT INTO groups (name, creator_id, created_at) VALUES (?, ?, ?)",
-            (group.name, current_user["id"], datetime.utcnow().isoformat())
+            "INSERT INTO groups (name, description, avatar_url, creator_id, created_at) VALUES (?, ?, ?, ?, ?)",
+            (name, description, avatar_url, current_user["id"], datetime.utcnow().isoformat())
         )
         group_id = cursor.lastrowid
-        member_ids = set(group.member_ids + [current_user["id"]])
+        member_ids_set = set(member_ids_list + [current_user["id"]])
         cursor.executemany(
             "INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
-            [(group_id, user_id) for user_id in member_ids]
+            [(group_id, user_id) for user_id in member_ids_set]
         )
         conn.commit()
         return {"message": "Group created successfully", "group_id": group_id}
@@ -393,7 +431,6 @@ async def leave_group(group_id: int, current_user: dict = Depends(get_current_us
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Проверяем, является ли пользователь членом группы
         cursor.execute(
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, current_user["id"])
@@ -401,7 +438,6 @@ async def leave_group(group_id: int, current_user: dict = Depends(get_current_us
         if not cursor.fetchone():
             raise HTTPException(status_code=403, detail="Not a member of this group")
 
-        # Проверяем, является ли пользователь создателем группы
         cursor.execute(
             "SELECT creator_id FROM groups WHERE id = ?",
             (group_id,)
@@ -412,12 +448,10 @@ async def leave_group(group_id: int, current_user: dict = Depends(get_current_us
         if group[0] == current_user["id"]:
             raise HTTPException(status_code=400, detail="Creator cannot leave the group")
 
-        # Удаляем пользователя из группы
         cursor.execute(
             "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, current_user["id"])
         )
-        # Удаляем сообщения пользователя в этой группе
         cursor.execute(
             "DELETE FROM messages WHERE group_id = ? AND sender_id = ?",
             (group_id, current_user["id"])
@@ -430,13 +464,101 @@ async def leave_group(group_id: int, current_user: dict = Depends(get_current_us
     finally:
         conn.close()
 
+@app.post("/groups/{group_id}/add-member")
+async def add_group_member(group_id: int, user_id: int = Form(...), current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        # Проверяем, является ли текущий пользователь создателем группы
+        cursor.execute(
+            "SELECT creator_id FROM groups WHERE id = ?",
+            (group_id,)
+        )
+        group = cursor.fetchone()
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+        if group[0] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Only the group creator can add members")
+
+        # Проверяем, существует ли пользователь
+        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Проверяем, не является ли пользователь уже участником группы
+        cursor.execute(
+            "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id)
+        )
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="User is already a member of this group")
+
+        # Добавляем пользователя в группу
+        cursor.execute(
+            "INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
+            (group_id, user_id)
+        )
+        conn.commit()
+        return {"message": "User added to group successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+@app.post("/groups/{group_id}/remove-member")
+async def remove_group_member(group_id: int, user_id: int = Form(...), current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        # Проверяем, является ли текущий пользователь создателем группы
+        cursor.execute(
+            "SELECT creator_id FROM groups WHERE id = ?",
+            (group_id,)
+        )
+        group = cursor.fetchone()
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+        if group[0] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Only the group creator can remove members")
+
+        # Нельзя удалить самого создателя
+        if user_id == current_user["id"]:
+            raise HTTPException(status_code=400, detail="Creator cannot remove themselves")
+
+        # Проверяем, является ли пользователь участником группы
+        cursor.execute(
+            "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id)
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=400, detail="User is not a member of this group")
+
+        # Удаляем пользователя из группы
+        cursor.execute(
+            "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id)
+        )
+        # Удаляем сообщения пользователя в этой группе
+        cursor.execute(
+            "DELETE FROM messages WHERE group_id = ? AND sender_id = ?",
+            (group_id, user_id)
+        )
+        conn.commit()
+        return {"message": "User removed from group successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
 @app.get("/groups", response_model=List[Group])
 async def get_groups(current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT g.id, g.name, g.creator_id, g.created_at
+        SELECT g.id, g.name, g.description, g.avatar_url, g.creator_id, g.created_at
         FROM groups g
         JOIN group_members gm ON g.id = gm.group_id
         WHERE gm.user_id = ?
@@ -444,7 +566,7 @@ async def get_groups(current_user: dict = Depends(get_current_user)):
         (current_user["id"],)
     )
     groups = [
-        {"id": row[0], "name": row[1], "creator_id": row[2], "created_at": row[3]}
+        {"id": row[0], "name": row[1], "description": row[2], "avatar_url": row[3], "creator_id": row[4], "created_at": row[5]}
         for row in cursor.fetchall()
     ]
     conn.close()
@@ -455,7 +577,6 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Проверяем, является ли пользователь членом группы
         cursor.execute(
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, current_user["id"])
@@ -463,10 +584,9 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
         if not cursor.fetchone():
             raise HTTPException(status_code=403, detail="Not a member of this group")
 
-        # Получаем данные группы
         cursor.execute(
             """
-            SELECT g.id, g.name, g.creator_id
+            SELECT g.id, g.name, g.description, g.avatar_url, g.creator_id
             FROM groups g
             WHERE g.id = ?
             """,
@@ -476,16 +596,14 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
         if not group:
             raise HTTPException(status_code=404, detail="Group not found")
 
-        # Получаем данные создателя
         cursor.execute(
             "SELECT id, username, avatar_url FROM users WHERE id = ?",
-            (group[2],)
+            (group[4],)
         )
         creator = cursor.fetchone()
         if not creator:
             raise HTTPException(status_code=404, detail="Creator not found")
 
-        # Получаем список участников
         cursor.execute(
             """
             SELECT u.id, u.username, u.avatar_url
@@ -504,6 +622,8 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
         return {
             "id": group[0],
             "name": group[1],
+            "description": group[2],
+            "avatar_url": group[3],
             "creator": {"id": creator[0], "username": creator[1], "avatar_url": creator[2]},
             "members": members
         }
@@ -516,7 +636,6 @@ async def get_recent_chats(current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Получаем недавние приватные чаты
         cursor.execute(
             """
             SELECT DISTINCT u.id, u.username, u.avatar_url,
@@ -536,10 +655,9 @@ async def get_recent_chats(current_user: dict = Depends(get_current_user)):
             for row in cursor.fetchall()
         ]
 
-        # Получаем группы, в которых пользователь состоит, даже если сообщений нет
         cursor.execute(
             """
-            SELECT g.id, g.name, u.avatar_url,
+            SELECT g.id, g.name, g.avatar_url,
                    (SELECT COUNT(*) FROM messages m2 
                     WHERE m2.group_id = g.id AND m2.is_read = 0 AND m2.sender_id != ?) as unread_count,
                    1 as is_group
@@ -557,7 +675,6 @@ async def get_recent_chats(current_user: dict = Depends(get_current_user)):
             for row in cursor.fetchall()
         ]
 
-        # Объединяем и сортируем
         chats = private_chats + group_chats
         chats.sort(key=lambda x: x["unread_count"], reverse=True)
         conn.close()
@@ -795,4 +912,3 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-  
