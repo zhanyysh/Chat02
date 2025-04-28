@@ -958,7 +958,7 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
 @app.put("/messages/{message_id}/edit")
 async def edit_message(
     message_id: int,
-    content: str = Form(...),
+    content: str = Form(None),  # Делаем content опциональным
     current_user: dict = Depends(get_current_user)
 ):
     conn = sqlite3.connect("chat.db")
@@ -975,14 +975,14 @@ async def edit_message(
         if message[0] != current_user["id"]:
             raise HTTPException(status_code=403, detail="You can only edit your own messages")
 
-        # Проверяем, что content не пустой
-        if not content or len(content.strip()) == 0:
+        # Если content предоставлен, проверяем, что он не пустой (если не null)
+        if content and len(content.strip()) == 0:
             raise HTTPException(status_code=400, detail="Content cannot be empty")
 
         # Обновляем сообщение
         cursor.execute(
             "UPDATE messages SET content = ? WHERE id = ?",
-            (content, message_id)
+            (content, message_id)  # content может быть null
         )
         conn.commit()
 
@@ -996,14 +996,14 @@ async def edit_message(
         message_data = {
             "action": "edit",
             "message_id": message_id,
-            "content": content,
+            "content": content,  # Может быть null
             "timestamp": message[3],
             "sender_id": current_user["id"],
             "receiver_id": message[1],
             "group_id": message[2],
             "username": username,
             "avatar_url": avatar_url,
-            "is_read": False,  # При редактировании оставляем is_read как False
+            "is_read": False,
             "files": json.loads(message[4]) if message[4] else None
         }
 

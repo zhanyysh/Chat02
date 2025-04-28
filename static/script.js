@@ -787,6 +787,47 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        document.addEventListener('click', (e) => {
+            const mediaLink = e.target.closest('.media-link');
+            if (mediaLink) {
+                e.preventDefault(); // Отменяем стандартное поведение ссылки
+                const mediaUrl = mediaLink.dataset.mediaUrl;
+                const mediaType = mediaLink.dataset.mediaType;
+                const mediaModal = document.getElementById('media-modal');
+                const mediaModalContent = document.getElementById('media-modal-content');
+        
+                if (mediaType === 'image') {
+                    mediaModalContent.innerHTML = `<img src="${mediaUrl}" alt="Full Image" class="modal-media">`;
+                } else if (mediaType === 'video') {
+                    mediaModalContent.innerHTML = `
+                        <video controls class="modal-media">
+                            <source src="${mediaUrl}" type="video/mp4">
+                            Ваш браузер не поддерживает видео.
+                        </video>`;
+                }
+        
+                mediaModal.style.display = 'flex';
+            }
+        });
+    
+        // Обработчик для закрытия модального окна
+        const closeMediaModalBtn = document.getElementById('close-media-modal-btn');
+        const mediaModal = document.getElementById('media-modal');
+        if (closeMediaModalBtn) {
+            closeMediaModalBtn.addEventListener('click', () => {
+                mediaModal.style.display = 'none';
+                document.getElementById('media-modal-content').innerHTML = ''; // Очищаем содержимое
+            });
+        }
+    
+        // Закрытие модального окна при клике вне контента
+        mediaModal.addEventListener('click', (e) => {
+            if (e.target === mediaModal) {
+                mediaModal.style.display = 'none';
+                document.getElementById('media-modal-content').innerHTML = ''; // Очищаем содержимое
+            }
+        });
+
         if (menuIcon && menuDrawer) {
             menuIcon.addEventListener('click', () => {
                 console.log('Нажата иконка меню');
@@ -1576,8 +1617,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                             if (messageDiv) {
                                 const contentText = messageDiv.querySelector('.content-text');
                                 if (contentText) {
-                                    contentText.textContent = message.content;
-                                    console.log(`Сообщение с ID ${message.message_id} обновлено: ${message.content}`);
+                                    if (message.content) {
+                                        contentText.textContent = message.content;
+                                        contentText.style.display = 'block';
+                                        console.log(`Сообщение с ID ${message.message_id} обновлено: ${message.content}`);
+                                    } else {
+                                        contentText.style.display = 'none';
+                                        console.log(`Сообщение с ID ${message.message_id} обновлено: текст удалён`);
+                                    }
                                 } else {
                                     console.warn(`Не найден .content-text для сообщения с ID ${message.message_id}`);
                                 }
@@ -1661,7 +1708,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Отображение сообщения
-        // Отображение сообщения
         function displayMessage(message) {
             // Дополнительная проверка: не вызываем функцию для сообщений с action: 'edit' или 'delete'
             if (message.action === 'edit' || message.action === 'delete') {
@@ -1712,19 +1758,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let mediaContent = '';
             if (message.files && message.files.length > 0) {
-                mediaContent = '<div class="media-content">';
+                // Считаем количество изображений и видео
+                const mediaItems = message.files.filter(file => file.file_type === 'image' || file.file_type === 'video').length;
+                
+                // Определяем класс в зависимости от количества медиафайлов
+                let mediaClass = '';
+                if (mediaItems === 1) {
+                    mediaClass = 'single-image';
+                } else if (mediaItems === 2) {
+                    mediaClass = 'two-images';
+                } else if (mediaItems >= 3) {
+                    mediaClass = 'multiple-images';
+                }
+
+                mediaContent = `<div class="media-content ${mediaClass}">`;
                 message.files.forEach(file => {
                     if (file.file_type === 'image') {
                         mediaContent += `
-                            <a href="${file.file_url}" target="_blank" class="media-link">
+                            <a class="media-link" data-media-url="${file.file_url}" data-media-type="image">
                                 <img src="${file.file_url}" alt="Image" class="preview-image-sent">
                             </a>`;
                     } else if (file.file_type === 'video') {
                         mediaContent += `
-                            <video controls class="preview-video-sent">
-                                <source src="${file.file_url}" type="video/mp4">
-                                Ваш браузер не поддерживает видео.
-                            </video>`;
+                            <a class="media-link" data-media-url="${file.file_url}" data-media-type="video">
+                                <video class="preview-video-sent">
+                                    <source src="${file.file_url}" type="video/mp4">
+                                    Ваш браузер не поддерживает видео.
+                                </video>
+                            </a>`;
                     } else if (file.file_type === 'file') {
                         const fileName = file.file_url.split('/').pop();
                         mediaContent += `
@@ -1742,14 +1803,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             contentDiv.innerHTML = `
                 <div class="username">${message.username}</div>
                 <div class="content">
-                    ${message.content ? `<div class="content-text">${message.content}</div>` : ''}
+                    ${message.content ? `<div class="content-text">${message.content}</div>` : '<div class="content-text" style="display: none;"></div>'}
                     ${mediaContent}
                     <div class="timestamp">${timeString}</div>
                 </div>
             `;
 
-            // Добавляем контекстное меню для собственных сообщений с текстом
-            if (isOwnMessage && message.content) {
+            // Добавляем контекстное меню для собственных сообщений, если есть текст ИЛИ медиафайлы
+            if (isOwnMessage && (message.content || (message.files && message.files.length > 0))) {
                 div.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     // Закрываем все открытые меню
@@ -1787,44 +1848,56 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Обработчик для кнопки редактирования
                     optionsMenu.querySelector('.edit-message-btn').addEventListener('click', () => {
                         const contentText = div.querySelector('.content-text');
-                        const originalContent = contentText.textContent;
-                        contentText.innerHTML = `<input type="text" class="edit-message-input" value="${originalContent}" />`;
+                        const originalContent = contentText.textContent || '';
+                        contentText.style.display = 'block'; // Показываем поле, если его не было
+                        contentText.innerHTML = `<input type="text" class="edit-message-input" value="${originalContent}" placeholder="Введите текст (опционально)" />`;
                         const input = contentText.querySelector('.edit-message-input');
                         input.focus();
 
                         input.addEventListener('blur', async () => {
                             const newContent = input.value.trim();
-                            if (newContent && newContent !== originalContent) {
-                                try {
-                                    const response = await fetch(`/messages/${message.id}/edit`, {
-                                        method: 'PUT',
-                                        headers: {
-                                            'Content-Type': 'application/x-www-form-urlencoded',
-                                            'Authorization': `Bearer ${token}`
-                                        },
-                                        body: new URLSearchParams({ content: newContent })
-                                    });
-                                    const result = await response.json();
-                                    if (response.ok) {
+                            try {
+                                const response = await fetch(`/messages/${message.id}/edit`, {
+                                    method: 'PUT',
+                                    headers: {
+                                        'Content-Type': 'application/x-www-form-urlencoded',
+                                        'Authorization': `Bearer ${token}`
+                                    },
+                                    body: new URLSearchParams({ content: newContent || null }) // Отправляем null, если текст пустой
+                                });
+                                const result = await response.json();
+                                if (response.ok) {
+                                    if (newContent) {
                                         contentText.textContent = newContent;
-                                        ws.send(JSON.stringify({
-                                            action: 'edit',
-                                            message_id: message.id,
-                                            content: newContent,
-                                            receiver_id: currentChatUserId,
-                                            group_id: currentGroupId
-                                        }));
+                                        contentText.style.display = 'block';
                                     } else {
-                                        showFlashMessage(result.detail, 'danger');
-                                        contentText.textContent = originalContent;
+                                        contentText.style.display = 'none'; // Скрываем, если текст пустой
                                     }
-                                } catch (error) {
-                                    console.error('Ошибка редактирования сообщения:', error);
-                                    showFlashMessage(`Не удалось отредактировать сообщение: ${error.message}`, 'danger');
-                                    contentText.textContent = originalContent;
+                                    ws.send(JSON.stringify({
+                                        action: 'edit',
+                                        message_id: message.id,
+                                        content: newContent || null,
+                                        receiver_id: currentChatUserId,
+                                        group_id: currentGroupId
+                                    }));
+                                } else {
+                                    showFlashMessage(result.detail, 'danger');
+                                    if (originalContent) {
+                                        contentText.textContent = originalContent;
+                                        contentText.style.display = 'block';
+                                    } else {
+                                        contentText.style.display = 'none';
+                                    }
                                 }
-                            } else {
-                                contentText.textContent = originalContent;
+                            } catch (error) {
+                                console.error('Ошибка редактирования сообщения:', error);
+                                showFlashMessage(`Не удалось отредактировать сообщение: ${error.message}`, 'danger');
+                                if (originalContent) {
+                                    contentText.textContent = originalContent;
+                                    contentText.style.display = 'block';
+                                } else {
+                                    contentText.style.display = 'none';
+                                }
                             }
                             optionsMenu.remove();
                         });

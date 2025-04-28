@@ -15,8 +15,6 @@
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
     z-index: 100;
-    justify-content: center;
-    align-items: center;
 }
 
 .modal-content {
@@ -28,9 +26,6 @@
     max-width: 400px;
     color: #fff;
     position: relative;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -39,7 +34,7 @@
 }
 
 .modal-content:hover {
-    transform: translate(-50%, -52%);
+    transform: translateY(-2%);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
 }
 
@@ -76,6 +71,130 @@
     color: #fff;
     transform: scale(1.2) rotate(15deg);
     box-shadow: 0 0 15px rgba(52, 152, 219, 0.5);
+}
+
+
+/* Стили для модального окна просмотра медиа */
+#media-modal {
+    background: rgba(0, 0, 0, 0.7);
+    justify-content: center;
+    align-items: center;
+    display: none;
+}
+
+.media-modal-content {
+    background: linear-gradient(135deg, #2A3B5A 0%, #1F2A44 100%);
+    padding: 20px;
+    border-radius: 20px;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
+    width: 90%;
+    max-width: 800px; /* Максимальная ширина для больших экранов */
+    max-height: 90vh; /* Максимальная высота */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    min-width: 600px; /* Минимальная ширина для модального окна */
+    min-height: 400px; /* Минимальная высота для модального окна */
+}
+
+/* Отключаем эффект наведения для .media-modal-content */
+.media-modal-content:hover {
+    transform: translate(-50%, -50%) !important; /* Сохраняем изначальное положение */
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5); /* Сохраняем изначальную тень */
+    transition: none; /* Убираем анимацию */
+}
+
+#media-modal-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+#media-modal-content img,
+#media-modal-content video {
+    max-width: 100%;
+    max-height: 80vh;
+    width: auto;
+    height: auto;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    object-fit: contain;
+    transition: none; /* Убираем все анимации */
+}
+
+/* Отключаем эффект наведения для изображений и видео в модальном окне */
+#media-modal-content img:hover,
+#media-modal-content video:hover {
+    transform: none !important;
+    transition: none !important;
+}
+
+/* Отключаем эффект наведения для .media-link внутри модального окна */
+#media-modal .media-link:hover {
+    transform: none !important;
+    transition: none !important;
+}
+
+/* Отключаем эффект наведения для элементов с классом modal-media */
+#media-modal-content .modal-media:hover {
+    transform: none !important;
+    transition: none !important;
+}
+
+/* Убедимся, что .chat-message:hover не влияет на модальное окно */
+.chat-message:hover {
+    transform: scale(1.02);
+}
+
+/* Стили для изображений в чате */
+.chat-message .content img:hover,
+.chat-message .content video:hover {
+    transform: scale(1.05);
+}
+
+#close-media-modal-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 10px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.3s ease, transform 0.3s ease;
+    z-index: 30;
+}
+
+#close-media-modal-btn:hover {
+    background: #e74c3c;
+    transform: scale(1.1);
+}
+
+/* Стили для кликабельных изображений */
+.media-link {
+    display: inline-block;
+    cursor: pointer;
+    transition: none; /* Убираем анимации */
+}
+
+/* Отключаем эффект наведения для .media-link в чате */
+.media-link:hover {
+    transform: none;
 }
 
 .group-members-container {
@@ -237,11 +356,48 @@
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    z-index: 10;
 }
 
 .profile-container:hover {
     transform: translate(-50%, -52%);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+}
+
+.profile-container #back-btn,
+.edit-profile-container #back-btn {
+    top: 20px;
+    left: 20px;
+}
+
+.profile-container #close-btn,
+.edit-profile-container #close-btn {
+    top: 20px;
+    right: 20px;
+}
+
+.profile-container #edit-btn {
+    top: 20px;
+    right: 70px;
+}
+
+#edit-group-avatar-btn {
+    top: 20px;
+    right: 70px;
+}
+
+#edit-create-group-avatar-btn {
+    top: 20px;
+    right: 70px;
+}
+
+.profile-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 30px;
+    position: relative;
+    z-index: 1; /* Устанавливаем ниже кнопок */
 }
 
 .profile-header .avatar {
@@ -576,8 +732,9 @@ body {
     justify-content: center;
     border-radius: 50%;
     transition: background 0.3s ease, color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
-    position: relative;
+    position: absolute;
     margin-right: 10px;
+    z-index: 20; /* Увеличиваем z-index, чтобы кнопки были выше других элементов */
 }
 
 .icon-btn:hover {
@@ -1112,20 +1269,23 @@ body {
 .chat-message .content .media-content {
     margin-top: 10px;
     max-width: 100%;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
+/* Базовый стиль для изображений */
 .chat-message .content img,
 .chat-message .content video {
-    max-width: 300px;
-    max-height: 300px;
     border-radius: 8px;
     object-fit: cover;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     transition: transform 0.3s ease;
 }
 
-.chat-message .content img:hover,
-.chat-message .content video:hover {
+/* Стили для изображений в чате */
+.chat-message .content img:hover:not(#media-modal-content img),
+.chat-message .content video:hover:not(#media-modal-content video) {
     transform: scale(1.05);
 }
 
@@ -1134,6 +1294,39 @@ body {
     height: auto;
 }
 
+/* Размеры изображений в зависимости от количества */
+.media-content.single-image .preview-image-sent {
+    width: 300px;
+    height: 300px;
+}
+
+.media-content.two-images .preview-image-sent {
+    width: 200px;
+    height: 200px;
+}
+
+.media-content.multiple-images .preview-image-sent {
+    width: 80px;
+    height: 80px;
+}
+
+/* Стили для видео (аналогично изображениям) */
+.media-content.single-image .preview-video-sent {
+    width: 300px;
+    height: 300px;
+}
+
+.media-content.two-images .preview-video-sent {
+    width: 200px;
+    height: 200px;
+}
+
+.media-content.multiple-images .preview-video-sent {
+    width: 80px;
+    height: 80px;
+}
+
+/* Стили для ссылок на файлы */
 .chat-message .content .file-link {
     display: inline-flex;
     align-items: center;
