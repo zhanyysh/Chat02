@@ -42,6 +42,35 @@
             </div>
             <div class="chat-messages" id="chat-messages"></div>
             <form class="chat-form" id="chat-form">
+                <!-- Кнопка со скрепкой -->
+                <button type="button" class="attachment-btn" id="attachment-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19.5 12.5l-7 7a5 5 0 01-7-7l7-7a3 3 0 014.24 4.24l-7 7a1 1 0 01-1.41-1.41l6.29-6.29"/>
+                    </svg>
+                </button>
+                <!-- Скрытое меню для выбора типа файла -->
+                <div class="attachment-menu" id="attachment-menu">
+                    <button type="button" onclick="document.getElementById('photo-video-upload').click()" class="upload-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Send photo or video
+                    </button>
+                    <button type="button" onclick="document.getElementById('file-upload').click()" class="upload-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M12 18v-6M9 15h6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Send file
+                    </button>
+                </div>
+                <!-- Контейнер для предварительного просмотра выбранных фотографий -->
+                <div class="preview-container" id="preview-container" style="display: none;">
+                    <div class="preview-images" id="preview-images"></div>
+                    <button type="button" class="clear-preview-btn" id="clear-preview-btn">✖</button>
+                </div>
+                <!-- Скрытые поля для загрузки файлов -->
+                <input type="file" id="photo-video-upload" accept="image/*,video/*" multiple style="display: none;">
+                <input type="file" id="file-upload" accept=".pdf,.txt" style="display: none;">
                 <input type="text" id="message-input" placeholder="Введите сообщение...">
                 <button type="submit">Отправить</button>
             </form>
@@ -74,7 +103,7 @@
     </div>
     <div id="group-info-modal" class="modal">
         <div class="modal-content">
-            <button id="close-group-info-btn" class="close-modal-btn">×</button>
+            <button id="close-group-info-btn" class="close-modal-btn">❌</button>
             <div class="profile-header">
                 <div class="avatar">
                     <svg id="group-avatar-svg" width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -116,5 +145,6 @@
         </div>
     </div>
     <script src="/static/script.js"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'936ee94d79ffeeb1',t:'MTc0NTc2MzExMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>

@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         try {
-            console.log('Отправляю запрос на /signup с данными:', data);
+            console.log('Отправляю запрос на /signup PRIME с данными:', data);
             const response = await fetch('/signup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -226,6 +226,81 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Ошибка регистрации:', error);
             showFlashMessage(`Не удалось зарегистрироваться: ${error.message}`, 'danger');
         }
+    }
+
+    // Обработка формы "Забыли пароль"
+    const forgotPasswordForm = document.getElementById('forgot-password-form');
+    if (forgotPasswordForm) {
+        forgotPasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Форма "Забыли пароль" отправлена');
+            const formData = new FormData(forgotPasswordForm);
+            try {
+                console.log('Отправляю запрос на /forgot-password');
+                const response = await fetch('/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams(formData)
+                });
+                console.log('Получен ответ от /forgot-password:', response.status);
+                const result = await response.json();
+                console.log('Результат:', result);
+                if (response.ok) {
+                    showFlashMessage('Ссылка для сброса пароля отправлена на ваш email', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                } else {
+                    showFlashMessage(result.detail, 'danger');
+                }
+            } catch (error) {
+                console.error('Ошибка запроса сброса пароля:', error);
+                showFlashMessage('Не удалось отправить запрос, попробуйте снова', 'danger');
+            }
+        });
+    }
+
+    // Обработка формы сброса пароля
+    const resetPasswordForm = document.getElementById('reset-password-form');
+    if (resetPasswordForm) {
+        resetPasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Форма сброса пароля отправлена');
+            const formData = new FormData(resetPasswordForm);
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            if (!token) {
+                showFlashMessage('Токен отсутствует, запросите новую ссылку', 'danger');
+                return;
+            }
+            formData.append('token', token);
+            const data = Object.fromEntries(formData);
+            if (data.new_password !== data.confirm_password) {
+                showFlashMessage('Пароли не совпадают', 'danger');
+                return;
+            }
+            try {
+                console.log('Отправляю запрос на /reset-password');
+                const response = await fetch('/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams(formData)
+                });
+                console.log('Получен ответ от /reset-password:', response.status);
+                const result = await response.json();
+                if (response.ok) {
+                    showFlashMessage('Пароль успешно сброшен! Перенаправляю на вход...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                } else {
+                    showFlashMessage(result.detail, 'danger');
+                }
+            } catch (error) {
+                console.error('Ошибка сброса пароля:', error);
+                showFlashMessage('Не удалось сбросить пароль, попробуйте снова', 'danger');
+            }
+        });
     }
 
     // Загрузка профиля текущего пользователя
@@ -478,7 +553,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         let hasMarkedAsRead = false;
         let hasInteracted = false;
         let lastMessageDate = null; // Для отслеживания последней даты сообщения
-
+        
+        let selectedFiles = [];
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
         const chatMessages = document.getElementById('chat-messages');
@@ -512,6 +588,204 @@ document.addEventListener('DOMContentLoaded', async () => {
         const closeGroupInfoBtn = document.getElementById('close-group-info-btn');
         const addGroupMemberInput = document.getElementById('add-group-member');
         const addGroupMemberResults = document.getElementById('add-group-member-results');
+        
+        const photoVideoUpload = document.getElementById('photo-video-upload');
+        const fileUpload = document.getElementById('file-upload');
+        const attachmentBtn = document.getElementById('attachment-btn');
+        const attachmentMenu = document.getElementById('attachment-menu');
+        const previewContainer = document.getElementById('preview-container');
+        const previewImages = document.getElementById('preview-images');
+        const clearPreviewBtn = document.getElementById('clear-preview-btn');
+        
+        console.log('photoVideoUpload:', photoVideoUpload);
+        console.log('previewContainer:', previewContainer);
+        console.log('previewImages:', previewImages);
+
+        if (attachmentBtn && attachmentMenu) {
+            attachmentBtn.addEventListener('click', () => {
+                console.log('Нажата кнопка скрепки');
+                attachmentMenu.classList.toggle('active');
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!attachmentBtn.contains(e.target) && !attachmentMenu.contains(e.target)) {
+                    attachmentMenu.classList.remove('active');
+                }
+            });
+        } else {
+            console.error('Кнопка скрепки или меню не найдены');
+        }
+
+        if (photoVideoUpload) {
+            photoVideoUpload.addEventListener('change', (e) => {
+                console.log('Событие change для photo-video-upload сработало');
+                const files = Array.from(e.target.files);
+                console.log('Выбранные файлы:', files);
+                if (files.length > 0) {
+                    selectedFiles = [...selectedFiles, ...files];
+                    console.log('Обновлённый массив selectedFiles:', selectedFiles);
+                    updatePreview();
+                } else {
+                    console.log('Файлы не выбраны');
+                }
+                photoVideoUpload.value = '';
+                attachmentMenu.classList.remove('active');
+            });
+        } else {
+            console.error('Элемент photo-video-upload не найден');
+        }
+
+        if (fileUpload) {
+            fileUpload.addEventListener('change', async (e) => {
+                console.log('Событие change для file-upload сработало');
+                const file = e.target.files[0];
+                if (file) {
+                    await uploadAndSendFile(file);
+                }
+                fileUpload.value = '';
+                attachmentMenu.classList.remove('active');
+            });
+        } else {
+            console.error('Элемент file-upload не найден');
+        }
+
+        if (clearPreviewBtn) {
+            clearPreviewBtn.addEventListener('click', () => {
+                console.log('Нажата кнопка очистки предварительного просмотра');
+                selectedFiles = [];
+                updatePreview();
+            });
+        } else {
+            console.error('Кнопка clear-preview-btn не найдена');
+        }
+
+        function updatePreview() {
+            console.log('Вызвана функция updatePreview, selectedFiles:', selectedFiles);
+            previewImages.innerHTML = '';
+            if (selectedFiles.length > 0) {
+                let loadedFiles = 0;
+                selectedFiles.forEach((file, index) => {
+                    console.log(`Обрабатываю файл ${index}:`, file);
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        console.log('FileReader onload сработал для файла:', file.name);
+                        const mediaDiv = document.createElement('div');
+                        mediaDiv.className = 'preview-image';
+                        if (file.type.startsWith('image/')) {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            mediaDiv.appendChild(img);
+                            console.log('Добавлено изображение:', img.src);
+                        } else if (file.type.startsWith('video/')) {
+                            const video = document.createElement('video');
+                            video.src = e.target.result;
+                            video.controls = true;
+                            mediaDiv.appendChild(video);
+                            console.log('Добавлено видео:', video.src);
+                        }
+                        const removeBtn = document.createElement('button');
+                        removeBtn.className = 'remove-preview-btn';
+                        removeBtn.textContent = '✖';
+                        removeBtn.addEventListener('click', () => {
+                            console.log(`Удаляю файл ${index}`);
+                            selectedFiles.splice(index, 1);
+                            updatePreview();
+                        });
+                        mediaDiv.appendChild(removeBtn);
+                        previewImages.appendChild(mediaDiv);
+                        console.log('Элемент добавлен в previewImages:', mediaDiv);
+                        loadedFiles++;
+                        if (loadedFiles === selectedFiles.length) {
+                            previewContainer.style.display = 'flex';
+                            console.log('Все файлы обработаны, previewContainer показан, стиль:', previewContainer.style.display);
+                        }
+                    };
+                    reader.onerror = (error) => {
+                        console.error('Ошибка чтения файла:', error);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            } else {
+                previewContainer.style.display = 'none';
+                console.log('previewContainer скрыт');
+            }
+        }
+
+        async function uploadAndSendFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                console.log('Отправляю файл на сервер:', file.name);
+                const response = await fetch('/upload-file', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                const result = await response.json();
+                console.log('Ответ от сервера:', result);
+                if (response.ok) {
+                    return { file_url: result.file_url, file_type: result.file_type };
+                } else {
+                    showFlashMessage(result.detail, 'danger');
+                    throw new Error(result.detail);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки файла:', error);
+                showFlashMessage(`Не удалось загрузить файл: ${error.message}`, 'danger');
+                throw error;
+            }
+        }
+
+        if (chatForm) {
+            chatForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Форма чата отправлена');
+                if (!currentChatUserId && !currentGroupId) {
+                    showFlashMessage('Выберите чат или группу', 'warning');
+                    return;
+                }
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    showFlashMessage('WebSocket не подключен, обновите страницу', 'danger');
+                    return;
+                }
+
+                const content = messageInput.value.trim();
+                let fileDataList = [];
+
+                // Загружаем все файлы и собираем их данные
+                if (selectedFiles.length > 0) {
+                    try {
+                        for (const file of selectedFiles) {
+                            const fileData = await uploadAndSendFile(file);
+                            fileDataList.push(fileData);
+                        }
+                    } catch (error) {
+                        console.error('Ошибка при загрузке файлов:', error);
+                        return;
+                    }
+                }
+
+                // Отправляем одно сообщение с текстом и всеми файлами
+                if (content || fileDataList.length > 0) {
+                    const messageData = {
+                        content: content || null,
+                        receiver_id: currentChatUserId,
+                        group_id: currentGroupId,
+                        files: fileDataList.length > 0 ? fileDataList : null // Список файлов
+                    };
+                    console.log('Отправляю сообщение через WebSocket:', messageData);
+                    ws.send(JSON.stringify(messageData));
+                    messageInput.value = '';
+                    selectedFiles = [];
+                    updatePreview();
+                    hasInteracted = true;
+                    updateUnreadDivider();
+                }
+            });
+        }
 
         if (menuIcon && menuDrawer) {
             menuIcon.addEventListener('click', () => {
@@ -565,10 +839,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     infoBtn.textContent = 'Инфо о группе';
                     infoBtn.addEventListener('click', async () => {
                         try {
+                            console.log('Запрос информации о группе:', currentGroupId);
                             const response = await fetch(`/groups/${currentGroupId}/info`, {
                                 headers: { 'Authorization': `Bearer ${token}` }
                             });
                             const groupInfo = await response.json();
+                            console.log('Полученные данные о группе:', groupInfo);
+                    
                             if (response.ok) {
                                 groupInfoTitle.textContent = groupInfo.name;
                                 groupDescription.textContent = groupInfo.description || 'Нет описания';
@@ -586,75 +863,85 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 groupCreator.addEventListener('click', () => {
                                     window.location.href = `/profile/${groupInfo.creator.id}?token=${encodeURIComponent(token)}`;
                                 });
-
-                                groupMembersCount.textContent = groupInfo.members.length;
+                    
+                                groupMembersCount.textContent = groupInfo.member_count || groupInfo.members.length;
                                 groupMembers.innerHTML = '';
-                                groupInfo.members.forEach(member => {
-                                    const memberDiv = document.createElement('div');
-                                    memberDiv.className = 'group-member-item';
-                                    memberDiv.dataset.userId = member.id;
-                                    memberDiv.innerHTML = `
-                                        <div class="group-member">
-                                            <div class="avatar">
-                                                ${member.avatar_url 
-                                                    ? `<img src="${member.avatar_url}" alt="${member.username}">`
-                                                    : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                        <rect width="24" height="24" rx="12" fill="#1E90FF"/>
-                                                        <circle cx="12" cy="8" r="4" fill="white"/>
-                                                        <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
-                                                    </svg>`
-                                                }
-                                            </div>
-                                            <div class="username">${member.username}</div>
-                                        </div>
-                                    `;
-                                    // Добавляем кнопку удаления для администратора
-                                    if (groupInfo.creator.id === currentUserId && member.id !== currentUserId) {
-                                        const removeBtn = document.createElement('button');
-                                        removeBtn.className = 'remove-btn';
-                                        removeBtn.textContent = 'Удалить';
-                                        removeBtn.addEventListener('click', async (e) => {
-                                            e.stopPropagation(); // Предотвращаем переход в профиль
-                                            if (confirm(`Вы уверены, что хотите удалить ${member.username} из группы?`)) {
-                                                try {
-                                                    const response = await fetch(`/groups/${currentGroupId}/remove-member`, {
-                                                        method: 'POST',
-                                                        headers: {
-                                                            'Content-Type': 'application/x-www-form-urlencoded',
-                                                            'Authorization': `Bearer ${token}`
-                                                        },
-                                                        body: new URLSearchParams({ user_id: member.id })
-                                                    });
-                                                    const result = await response.json();
-                                                    if (response.ok) {
-                                                        showFlashMessage('Пользователь удалён из группы', 'success');
-                                                        memberDiv.remove();
-                                                        groupMembersCount.textContent = parseInt(groupMembersCount.textContent) - 1;
-                                                    } else {
-                                                        showFlashMessage(result.detail, 'danger');
+                                if (!groupInfo.members || groupInfo.members.length === 0) {
+                                    console.log('Список участников пуст');
+                                    const noMembersDiv = document.createElement('div');
+                                    noMembersDiv.className = 'group-member-item';
+                                    noMembersDiv.textContent = 'Нет участников';
+                                    groupMembers.appendChild(noMembersDiv);
+                                } else {
+                                    console.log('Рендерим участников:', groupInfo.members);
+                                    groupInfo.members.forEach(member => {
+                                        console.log('Добавляю участника:', member.username);
+                                        const memberDiv = document.createElement('div');
+                                        memberDiv.className = 'group-member-item';
+                                        memberDiv.dataset.userId = member.id;
+                                        memberDiv.innerHTML = `
+                                            <div class="group-member">
+                                                <div class="avatar">
+                                                    ${member.avatar_url 
+                                                        ? `<img src="${member.avatar_url}" alt="${member.username}">`
+                                                        : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <rect width="24" height="24" rx="12" fill="#1E90FF"/>
+                                                            <circle cx="12" cy="8" r="4" fill="white"/>
+                                                            <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
+                                                        </svg>`
                                                     }
-                                                } catch (error) {
-                                                    console.error('Ошибка удаления участника:', error);
-                                                    showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
+                                                </div>
+                                                <span class="username">${member.username}</span>
+                                            </div>
+                                        `;
+                                        if (groupInfo.creator.id === currentUserId && member.id !== currentUserId) {
+                                            const removeBtn = document.createElement('button');
+                                            removeBtn.className = 'remove-btn';
+                                            removeBtn.textContent = 'Удалить';
+                                            removeBtn.addEventListener('click', async (e) => {
+                                                e.stopPropagation();
+                                                if (confirm(`Вы уверены, что хотите удалить ${member.username} из группы?`)) {
+                                                    try {
+                                                        const response = await fetch(`/groups/${currentGroupId}/remove-member`, {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/x-www-form-urlencoded',
+                                                                'Authorization': `Bearer ${token}`
+                                                            },
+                                                            body: new URLSearchParams({ user_id: member.id })
+                                                        });
+                                                        const result = await response.json();
+                                                        if (response.ok) {
+                                                            showFlashMessage('Пользователь удалён из группы', 'success');
+                                                            memberDiv.remove();
+                                                            groupMembersCount.textContent = parseInt(groupMembersCount.textContent) - 1;
+                                                        } else {
+                                                            showFlashMessage(result.detail, 'danger');
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('Ошибка удаления участника:', error);
+                                                        showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
+                                                    }
                                                 }
-                                            }
+                                            });
+                                            memberDiv.appendChild(removeBtn);
+                                        }
+                                        memberDiv.querySelector('.group-member').addEventListener('click', () => {
+                                            window.location.href = `/profile/${member.id}?token=${encodeURIComponent(token)}`;
                                         });
-                                        memberDiv.appendChild(removeBtn);
-                                    }
-                                    memberDiv.querySelector('.group-member').addEventListener('click', () => {
-                                        window.location.href = `/profile/${member.id}?token=${encodeURIComponent(token)}`;
+                                        groupMembers.appendChild(memberDiv);
+                                        console.log('Элемент добавлен в DOM:', memberDiv);
                                     });
-                                    groupMembers.appendChild(memberDiv);
-                                });
-
-                                // Показываем элементы управления для администратора
+                                    console.log('Список участников после рендеринга:', groupMembers.innerHTML);
+                                }
+                    
                                 const adminSection = document.querySelector('.admin-only');
                                 if (groupInfo.creator.id === currentUserId) {
                                     adminSection.style.display = 'flex';
                                 } else {
                                     adminSection.style.display = 'none';
                                 }
-
+                    
                                 groupInfoModal.style.display = 'block';
                             } else {
                                 showFlashMessage(groupInfo.detail, 'danger');
@@ -1109,7 +1396,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : ''}
                 `;
                 chatItem.appendChild(infoDiv);
-
                 chatItem.addEventListener('click', async () => {
                     if (currentChatUserId || currentGroupId) {
                         await markMessagesAsRead(currentChatUserId, currentGroupId);
@@ -1120,6 +1406,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     currentChatUserId = isGroup ? null : userId;
                     currentGroupId = isGroup ? groupId : null;
+                    console.log('Выбрана группа:', { currentGroupId, username });
                     document.querySelectorAll('.group-item').forEach(item => item.classList.remove('active'));
                     chatItem.classList.add('active');
                     document.getElementById('chat-title').textContent = username;
@@ -1182,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const existingDivider = document.querySelector('.unread-divider');
             let firstUnreadMessage = null;
             let foundUnread = false;
-
+        
             messages.forEach(message => {
                 const isOwnMessage = message.classList.contains('own-message');
                 const isRead = message.dataset.read === 'true';
@@ -1191,7 +1478,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     foundUnread = true;
                 }
             });
-
+        
             if (foundUnread && !existingDivider) {
                 const divider = document.createElement('div');
                 divider.className = 'unread-divider';
@@ -1200,7 +1487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (!foundUnread && existingDivider) {
                 existingDivider.remove();
             }
-
+        
             if (firstUnreadMessage && !hasMarkedAsRead && hasInteracted) {
                 const divider = document.querySelector('.unread-divider');
                 const dividerRect = divider ? divider.getBoundingClientRect() : null;
@@ -1242,8 +1529,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 ws.onmessage = (event) => {
                     const message = JSON.parse(event.data);
-                    console.log('Получено сообщение:', message);
-                    if (message.sender_id !== currentUserId && !message.is_read) {
+                    console.log('Получено WebSocket-сообщение:', message);
+                
+                    // Проверяем наличие action и определяем тип сообщения
+                    const isEditAction = message.action === 'edit';
+                    const isDeleteAction = message.action === 'delete';
+                    const isNewMessage = !message.action || message.action === 'create';
+                
+                    // Дополнительно логируем значения условий для отладки
+                    console.log('Условия:', { isNewMessage, isEditAction, isDeleteAction });
+                
+                    // Обновляем счётчик непрочитанных сообщений только для новых сообщений
+                    if (isNewMessage && message.sender_id !== currentUserId && !message.is_read) {
                         const senderId = message.sender_id;
                         const groupId = message.group_id;
                         if (groupId) {
@@ -1270,9 +1567,51 @@ document.addEventListener('DOMContentLoaded', async () => {
                             addChatToList(senderId, null, message.username, message.avatar_url, 0, false);
                         }
                     }
+                
+                    // Обрабатываем сообщение только если оно относится к текущему чату
                     if ((message.receiver_id === currentChatUserId && !message.group_id) || message.group_id === currentGroupId) {
-                        displayMessage(message);
-                        updateUnreadDivider();
+                        if (isEditAction) {
+                            console.log('Обработка действия edit для сообщения:', message);
+                            const messageDiv = document.querySelector(`.chat-message[data-message-id="${message.message_id}"]`);
+                            if (messageDiv) {
+                                const contentText = messageDiv.querySelector('.content-text');
+                                if (contentText) {
+                                    contentText.textContent = message.content;
+                                    console.log(`Сообщение с ID ${message.message_id} обновлено: ${message.content}`);
+                                } else {
+                                    console.warn(`Не найден .content-text для сообщения с ID ${message.message_id}`);
+                                }
+                            } else {
+                                console.warn(`Сообщение с ID ${message.message_id} не найдено в DOM`);
+                            }
+                        } else if (isDeleteAction) {
+                            console.log('Обработка действия delete для сообщения:', message);
+                            const messageDiv = document.querySelector(`.chat-message[data-message-id="${message.message_id}"]`);
+                            if (messageDiv) {
+                                messageDiv.remove();
+                                console.log(`Сообщение с ID ${message.message_id} удалено`);
+                            } else {
+                                console.warn(`Сообщение с ID ${message.message_id} не найдено в DOM`);
+                            }
+                        } else if (isNewMessage) {
+                            // Проверяем, не существует ли уже сообщение с таким ID
+                            const existingMessage = document.querySelector(`.chat-message[data-message-id="${message.id}"]`);
+                            if (existingMessage) {
+                                console.log(`Сообщение с ID ${message.id} уже отображено, обновляем его вместо добавления нового`);
+                                const contentText = existingMessage.querySelector('.content-text');
+                                if (contentText && message.content) {
+                                    contentText.textContent = message.content;
+                                }
+                            } else {
+                                console.log('Отображаем новое сообщение:', message);
+                                displayMessage(message);
+                                updateUnreadDivider();
+                            }
+                        } else {
+                            console.warn('Неизвестное действие:', message.action);
+                        }
+                    } else {
+                        console.log('Сообщение не относится к текущему чату:', { receiver_id: message.receiver_id, group_id: message.group_id });
                     }
                 };
 
@@ -1304,9 +1643,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(`Не удалось загрузить сообщения: ${response.status} (${errorText})`);
                 }
                 const messages = await response.json();
-                console.log('Загружены сообщения:', messages);
+                console.log('Загружены сообщения:', messages); // Логируем загруженные сообщения
                 chatMessages.innerHTML = '';
-                lastMessageDate = null; // Сбрасываем дату последнего сообщения
+                lastMessageDate = null;
                 messages.forEach(displayMessage);
                 const firstUnreadMessage = chatMessages.querySelector('.chat-message:not(.own-message):not([data-read="true"])');
                 if (firstUnreadMessage) {
@@ -1322,14 +1661,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Отображение сообщения
+        // Отображение сообщения
         function displayMessage(message) {
-            console.log(`Отображаю сообщение: sender_id=${message.sender_id}, currentUserId=${currentUserId}, isOwnMessage=${message.sender_id === currentUserId}`);
-            
-            // Получаем дату сообщения
-            const messageDate = new Date(message.timestamp);
-            const messageDateString = messageDate.toISOString().split('T')[0]; // Формат YYYY-MM-DD
+            // Дополнительная проверка: не вызываем функцию для сообщений с action: 'edit' или 'delete'
+            if (message.action === 'edit' || message.action === 'delete') {
+                console.warn('displayMessage вызвана для сообщения с action:', message.action, '— игнорируем');
+                return;
+            }
 
-            // Проверяем, отличается ли дата от предыдущего сообщения
+            console.log(`Отображаю сообщение: sender_id=${message.sender_id}, currentUserId=${currentUserId}, isOwnMessage=${message.sender_id === currentUserId}`);
+
+            const messageDate = new Date(message.timestamp);
+            const messageDateString = messageDate.toISOString().split('T')[0];
+
             if (lastMessageDate !== messageDateString) {
                 const divider = document.createElement('div');
                 divider.className = 'date-divider';
@@ -1338,11 +1682,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 lastMessageDate = messageDateString;
             }
 
-            // Создаём элемент сообщения
             const div = document.createElement('div');
             const isOwnMessage = message.sender_id === currentUserId;
             div.className = `chat-message ${isOwnMessage ? 'own-message' : ''}`;
             div.dataset.read = message.is_read ? 'true' : 'false';
+            div.dataset.messageId = message.id; // Добавляем ID сообщения
 
             const avatarDiv = document.createElement('div');
             avatarDiv.className = 'message-avatar';
@@ -1365,13 +1709,170 @@ document.addEventListener('DOMContentLoaded', async () => {
             contentDiv.className = 'message-content-wrapper';
             const date = new Date(message.timestamp);
             const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            let mediaContent = '';
+            if (message.files && message.files.length > 0) {
+                mediaContent = '<div class="media-content">';
+                message.files.forEach(file => {
+                    if (file.file_type === 'image') {
+                        mediaContent += `
+                            <a href="${file.file_url}" target="_blank" class="media-link">
+                                <img src="${file.file_url}" alt="Image" class="preview-image-sent">
+                            </a>`;
+                    } else if (file.file_type === 'video') {
+                        mediaContent += `
+                            <video controls class="preview-video-sent">
+                                <source src="${file.file_url}" type="video/mp4">
+                                Ваш браузер не поддерживает видео.
+                            </video>`;
+                    } else if (file.file_type === 'file') {
+                        const fileName = file.file_url.split('/').pop();
+                        mediaContent += `
+                            <a href="${file.file_url}" class="file-link" download>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+                                    <path d="M12 12v9m0 0l-4-4m4 4l4-4m-9-5V5a2 2 0 012-2h4a2 2 0 012 2v6" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                ${fileName}
+                            </a>`;
+                    }
+                });
+                mediaContent += '</div>';
+            }
+
             contentDiv.innerHTML = `
                 <div class="username">${message.username}</div>
                 <div class="content">
-                    <div class="content-text">${message.content}</div>
+                    ${message.content ? `<div class="content-text">${message.content}</div>` : ''}
+                    ${mediaContent}
                     <div class="timestamp">${timeString}</div>
                 </div>
             `;
+
+            // Добавляем контекстное меню для собственных сообщений с текстом
+            if (isOwnMessage && message.content) {
+                div.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    // Закрываем все открытые меню
+                    document.querySelectorAll('.message-options').forEach(menu => menu.remove());
+
+                    const optionsMenu = document.createElement('div');
+                    optionsMenu.className = 'message-options';
+                    optionsMenu.innerHTML = `
+                        <button class="edit-message-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 20h9" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Edit
+                        </button>
+                        <button class="delete-message-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 6h18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M8 6v14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M10 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M14 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Delete
+                        </button>
+                    `;
+
+                    // Позиционируем меню
+                    const messageRect = div.getBoundingClientRect();
+                    optionsMenu.style.top = `${messageRect.bottom + window.scrollY}px`;
+                    optionsMenu.style.left = `${messageRect.right - 150 + window.scrollX}px`;
+
+                    document.body.appendChild(optionsMenu);
+
+                    // Обработчик для кнопки редактирования
+                    optionsMenu.querySelector('.edit-message-btn').addEventListener('click', () => {
+                        const contentText = div.querySelector('.content-text');
+                        const originalContent = contentText.textContent;
+                        contentText.innerHTML = `<input type="text" class="edit-message-input" value="${originalContent}" />`;
+                        const input = contentText.querySelector('.edit-message-input');
+                        input.focus();
+
+                        input.addEventListener('blur', async () => {
+                            const newContent = input.value.trim();
+                            if (newContent && newContent !== originalContent) {
+                                try {
+                                    const response = await fetch(`/messages/${message.id}/edit`, {
+                                        method: 'PUT',
+                                        headers: {
+                                            'Content-Type': 'application/x-www-form-urlencoded',
+                                            'Authorization': `Bearer ${token}`
+                                        },
+                                        body: new URLSearchParams({ content: newContent })
+                                    });
+                                    const result = await response.json();
+                                    if (response.ok) {
+                                        contentText.textContent = newContent;
+                                        ws.send(JSON.stringify({
+                                            action: 'edit',
+                                            message_id: message.id,
+                                            content: newContent,
+                                            receiver_id: currentChatUserId,
+                                            group_id: currentGroupId
+                                        }));
+                                    } else {
+                                        showFlashMessage(result.detail, 'danger');
+                                        contentText.textContent = originalContent;
+                                    }
+                                } catch (error) {
+                                    console.error('Ошибка редактирования сообщения:', error);
+                                    showFlashMessage(`Не удалось отредактировать сообщение: ${error.message}`, 'danger');
+                                    contentText.textContent = originalContent;
+                                }
+                            } else {
+                                contentText.textContent = originalContent;
+                            }
+                            optionsMenu.remove();
+                        });
+
+                        input.addEventListener('keypress', async (e) => {
+                            if (e.key === 'Enter') {
+                                input.blur();
+                            }
+                        });
+                    });
+
+                    // Обработчик для кнопки удаления
+                    optionsMenu.querySelector('.delete-message-btn').addEventListener('click', async () => {
+                        try {
+                            const response = await fetch(`/messages/${message.id}`, {
+                                method: 'DELETE',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                }
+                            });
+                            const result = await response.json();
+                            if (response.ok) {
+                                div.remove();
+                                ws.send(JSON.stringify({
+                                    action: 'delete',
+                                    message_id: message.id,
+                                    receiver_id: currentChatUserId,
+                                    group_id: currentGroupId
+                                }));
+                            } else {
+                                showFlashMessage(result.detail, 'danger');
+                            }
+                        } catch (error) {
+                            console.error('Ошибка удаления сообщения:', error);
+                            showFlashMessage(`Не удалось удалить сообщение: ${error.message}`, 'danger');
+                        }
+                        optionsMenu.remove();
+                    });
+                });
+
+                // Закрываем меню при клике вне его
+                document.addEventListener('click', (e) => {
+                    const optionsMenu = document.querySelector('.message-options');
+                    if (optionsMenu && !div.contains(e.target) && !optionsMenu.contains(e.target)) {
+                        optionsMenu.remove();
+                    }
+                }, { once: true });
+            }
 
             if (isOwnMessage) {
                 div.appendChild(contentDiv);
@@ -1382,34 +1883,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
-
-        // Обработка формы чата
-        if (chatForm) {
-            chatForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                console.log('Форма чата отправлена');
-                if (!currentChatUserId && !currentGroupId) {
-                    showFlashMessage('Выберите чат или группу', 'warning');
-                    return;
-                }
-                if (!ws || ws.readyState !== WebSocket.OPEN) {
-                    showFlashMessage('WebSocket не подключен, обновите страницу', 'danger');
-                    return;
-                }
-                const content = messageInput.value.trim();
-                if (content) {
-                    console.log('Отправляю сообщение:', content);
-                    ws.send(JSON.stringify({
-                        content,
-                        receiver_id: currentChatUserId,
-                        group_id: currentGroupId
-                    }));
-                    messageInput.value = '';
-                    hasInteracted = true;
-                    updateUnreadDivider();
-                }
-            });
+        
+        function updatePreview() {
+            previewImages.innerHTML = '';
+            if (selectedFiles.length > 0) {
+                selectedFiles.forEach((file, index) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const mediaDiv = document.createElement('div');
+                        mediaDiv.className = 'preview-image';
+                        if (file.type.startsWith('image/')) {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            mediaDiv.appendChild(img);
+                        } else if (file.type.startsWith('video/')) {
+                            const video = document.createElement('video');
+                            video.src = e.target.result;
+                            video.controls = true;
+                            mediaDiv.appendChild(video);
+                        }
+                        const removeBtn = document.createElement('button');
+                        removeBtn.className = 'remove-preview-btn';
+                        removeBtn.textContent = '✖';
+                        removeBtn.addEventListener('click', () => {
+                            selectedFiles.splice(index, 1); // Удаляем файл из массива
+                            updatePreview(); // Обновляем просмотр
+                        });
+                        mediaDiv.appendChild(removeBtn);
+                        previewImages.appendChild(mediaDiv);
+                    };
+                    reader.readAsDataURL(file);
+                });
+                previewContainer.style.display = 'flex';
+            } else {
+                previewContainer.style.display = 'none';
+            }
         }
 
         // Поиск пользователей для начала чата

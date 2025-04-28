@@ -12,6 +12,13 @@ from pydantic import BaseModel
 import json
 import os
 import shutil
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
@@ -22,10 +29,22 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 AVATARS_DIR = "static/avatars"
 if not os.path.exists(AVATARS_DIR):
     os.makedirs(AVATARS_DIR)
+    
+# Ensure uploads directory exists
+UPLOADS_DIR = "static/uploads"
+if not os.path.exists(UPLOADS_DIR):
+    os.makedirs(UPLOADS_DIR)
+
+# SMTP Configuration
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_USER = "tynybekovjanyshbek@gmail.com"
+SMTP_PASSWORD = "icbvlisqskeunccq"
 
 SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+RESET_TOKEN_EXPIRE_MINUTES = 60  # Password reset token valid for 60 minutes   
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
@@ -44,9 +63,10 @@ class UserInDB(User):
 class Token(BaseModel):
     access_token: str
     token_type: str
-
+    
 class Message(BaseModel):
-    content: str
+    id: int  # Добавляем поле id
+    content: str | None = None
     timestamp: str
     sender_id: int
     receiver_id: int | None = None
@@ -54,6 +74,7 @@ class Message(BaseModel):
     username: str
     avatar_url: str | None = None
     is_read: bool = False
+    files: List[Dict[str, str]] | None = None
 
 class RecentChat(BaseModel):
     user_id: int | None = None
@@ -65,22 +86,22 @@ class RecentChat(BaseModel):
 
 class GroupCreate(BaseModel):
     name: str
-    description: str | None = None  # Добавляем описание
+    description: str | None = None
     member_ids: List[int]
 
 class Group(BaseModel):
     id: int
     name: str
-    description: str | None = None  # Добавляем описание
-    avatar_url: str | None = None   # Добавляем фото группы
+    description: str | None = None
+    avatar_url: str | None = None
     creator_id: int
     created_at: str
 
 class GroupInfo(BaseModel):
     id: int
     name: str
-    description: str | None = None  # Добавляем описание
-    avatar_url: str | None = None   # Добавляем фото группы
+    description: str | None = None
+    avatar_url: str | None = None
     creator: dict
     members: List[dict]
 
@@ -104,9 +125,10 @@ def init_db():
             sender_id INTEGER,
             receiver_id INTEGER,
             group_id INTEGER,
-            content TEXT NOT NULL,
+            content TEXT,
             timestamp TEXT NOT NULL,
             is_read INTEGER DEFAULT 0,
+            files TEXT,  -- Храним список файлов как JSON-строку
             FOREIGN KEY (sender_id) REFERENCES users(id),
             FOREIGN KEY (receiver_id) REFERENCES users(id),
             FOREIGN KEY (group_id) REFERENCES groups(id)
@@ -116,8 +138,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS groups (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            description TEXT,  -- Добавляем поле description
-            avatar_url TEXT,   -- Добавляем поле avatar_url
+            description TEXT,
+            avatar_url TEXT,
             creator_id INTEGER,
             created_at TEXT NOT NULL,
             FOREIGN KEY (creator_id) REFERENCES users(id)
@@ -132,9 +154,17 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER,
+            expires_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
     conn.commit()
     conn.close()
-
+    
 init_db()
 
 class ConnectionManager:
@@ -167,6 +197,54 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+def create_reset_token(user_id: int):
+    token = str(uuid.uuid4())
+    expires_at = (datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)).isoformat()
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
+        (token, user_id, expires_at)
+    )
+    conn.commit()
+    conn.close()
+    return token
+
+def send_reset_email(email: str, reset_link: str):
+    # Create the email message
+    msg = MIMEMultipart()
+    msg['From'] = SMTP_USER
+    msg['To'] = email
+    msg['Subject'] = "Сброс пароля для вашей учетной записи"
+
+    body = f"""
+    Здравствуйте,
+
+    Вы запросили сброс пароля для вашей учетной записи. Пожалуйста, перейдите по следующей ссылке, чтобы сбросить пароль:
+
+    {reset_link}
+
+    Ссылка действительна в течение {RESET_TOKEN_EXPIRE_MINUTES} минут. Если вы не запрашивали сброс пароля, проигнорируйте это письмо.
+
+    С уважением,
+    Команда приложения
+    """
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        # Connect to the SMTP server
+        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+        server.starttls()  # Enable TLS
+        server.login(SMTP_USER, SMTP_PASSWORD)
+
+        # Send the email
+        server.sendmail(SMTP_USER, email, msg.as_string())
+        server.quit()
+        print(f"Email успешно отправлен на {email} с ссылкой: {reset_link}")
+    except Exception as e:
+        print(f"Ошибка отправки email: {e}")
+        raise HTTPException(status_code=500, detail=f"Не удалось отправить email: {str(e)}")
 
 async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -215,6 +293,124 @@ async def get_signup():
     with open("signup.html", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def get_forgot_password():
+    with open("forgot-password.html", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+@app.post("/forgot-password")
+async def forgot_password(email: str = Form(...)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Пользователь с таким email не найден")
+    
+    user_id = user[0]
+    reset_token = create_reset_token(user_id)
+    reset_link = f"http://localhost:8000/reset-password?token={reset_token}"
+    
+    # Send the reset link via email
+    send_reset_email(email, reset_link)
+    
+    conn.close()
+    return {"message": "Ссылка для сброса пароля отправлена на ваш email"}
+
+@app.get("/reset-password", response_class=HTMLResponse)
+async def get_reset_password(request: Request):
+    token = request.query_params.get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Токен для сброса пароля отсутствует")
+    
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", (token,))
+    token_data = cursor.fetchone()
+    if not token_data:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Недействительный токен для сброса пароля")
+    
+    user_id, expires_at = token_data
+    expires_at = datetime.fromisoformat(expires_at)
+    if datetime.utcnow() > expires_at:
+        cursor.execute("DELETE FROM password_reset_tokens WHERE token = ?", (token,))
+        conn.commit()
+        conn.close()
+        raise HTTPException(status_code=400, detail="Срок действия токена истёк")
+    
+    conn.close()
+    with open("reset-password.html", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+@app.post("/reset-password")
+async def reset_password(
+    token: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...)
+):
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="Пароли не совпадают")
+    
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Пароль должен содержать минимум 6 символов")
+
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", (token,))
+    token_data = cursor.fetchone()
+    if not token_data:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Недействительный токен для сброса пароля")
+    
+    user_id, expires_at = token_data
+    expires_at = datetime.fromisoformat(expires_at)
+    if datetime.utcnow() > expires_at:
+        cursor.execute("DELETE FROM password_reset_tokens WHERE token = ?", (token,))
+        conn.commit()
+        conn.close()
+        raise HTTPException(status_code=400, detail="Срок действия токена истёк")
+    
+    hashed_password = get_password_hash(new_password)
+    cursor.execute(
+        "UPDATE users SET hashed_password = ? WHERE id = ?",
+        (hashed_password, user_id)
+    )
+    cursor.execute("DELETE FROM password_reset_tokens WHERE token = ?", (token,))
+    conn.commit()
+    conn.close()
+    return {"message": "Пароль успешно сброшен"}
+
+@app.post("/upload-file")
+async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    print(f"Получен запрос на загрузку файла от пользователя {current_user['id']}, имя файла: {file.filename}")  # Логируем запрос
+    allowed_image_types = ["image/jpeg", "image/png", "image/gif"]
+    allowed_video_types = ["video/mp4", "video/webm"]
+    allowed_file_types = ["application/pdf", "text/plain"]
+
+    file_type = None
+    if file.content_type in allowed_image_types:
+        file_type = "image"
+    elif file.content_type in allowed_video_types:
+        file_type = "video"
+    elif file.content_type in allowed_file_types:
+        file_type = "file"
+    else:
+        print(f"Неподдерживаемый тип файла: {file.content_type}")
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    filename = f"{current_user['id']}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+    file_path = os.path.join(UPLOADS_DIR, filename)
+
+    print(f"Сохраняю файл по пути: {file_path}")
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    file_url = f"/static/uploads/{filename}"
+    print(f"Файл успешно сохранён, возвращаю file_url: {file_url}, file_type: {file_type}")
+    return {"file_url": file_url, "file_type": file_type}
+
 @app.get("/chat", response_class=HTMLResponse)
 async def get_chat(request: Request, current_user: dict = Depends(get_current_user)):
     with open("chat.html", encoding="utf-8") as f:
@@ -251,7 +447,7 @@ async def search_users(
     query: str = Query(..., min_length=2, description="Search query for users"),
     current_user: dict = Depends(get_current_user)
 ):
-    print(f"Received search query: {query}")  # Отладка
+    print(f"Received search query: {query}")
     if len(query.strip()) < 2:
         raise HTTPException(status_code=422, detail="Query must be at least 2 characters long")
     conn = sqlite3.connect("chat.db")
@@ -261,7 +457,7 @@ async def search_users(
         (f"%{query}%", current_user["id"])
     )
     users = [{"id": user[0], "username": user[1]} for user in cursor.fetchall()]
-    print(f"Found users: {users}")  # Отладка
+    print(f"Found users: {users}")
     conn.close()
     return users
 
@@ -374,15 +570,14 @@ async def signup(user: User):
 @app.post("/groups")
 async def create_group(
     name: str = Form(...),
-    description: str = Form(None),  # Добавляем описание
-    member_ids: str = Form(...),    # Ожидаем строку с JSON-массивом
-    avatar: UploadFile = File(None),  # Добавляем загрузку фото
+    description: str = Form(None),
+    member_ids: str = Form(...),
+    avatar: UploadFile = File(None),
     current_user: dict = Depends(get_current_user)
 ):
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Парсим member_ids из строки JSON
         try:
             member_ids_list = json.loads(member_ids)
             if not isinstance(member_ids_list, list):
@@ -397,7 +592,6 @@ async def create_group(
         if len(existing_users) != len(member_ids_list):
             raise HTTPException(status_code=400, detail="One or more user IDs are invalid")
 
-        # Сохраняем фото группы, если оно загружено
         avatar_url = None
         if avatar:
             if avatar.content_type not in ["image/jpeg", "image/png"]:
@@ -469,7 +663,6 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Проверяем, является ли текущий пользователь создателем группы
         cursor.execute(
             "SELECT creator_id FROM groups WHERE id = ?",
             (group_id,)
@@ -480,12 +673,10 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
         if group[0] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Only the group creator can add members")
 
-        # Проверяем, существует ли пользователь
         cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Проверяем, не является ли пользователь уже участником группы
         cursor.execute(
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
@@ -493,7 +684,6 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="User is already a member of this group")
 
-        # Добавляем пользователя в группу
         cursor.execute(
             "INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
             (group_id, user_id)
@@ -511,7 +701,6 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
-        # Проверяем, является ли текущий пользователь создателем группы
         cursor.execute(
             "SELECT creator_id FROM groups WHERE id = ?",
             (group_id,)
@@ -522,11 +711,9 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
         if group[0] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Only the group creator can remove members")
 
-        # Нельзя удалить самого создателя
         if user_id == current_user["id"]:
             raise HTTPException(status_code=400, detail="Creator cannot remove themselves")
 
-        # Проверяем, является ли пользователь участником группы
         cursor.execute(
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
@@ -534,12 +721,10 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
         if not cursor.fetchone():
             raise HTTPException(status_code=400, detail="User is not a member of this group")
 
-        # Удаляем пользователя из группы
         cursor.execute(
             "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
         )
-        # Удаляем сообщения пользователя в этой группе
         cursor.execute(
             "DELETE FROM messages WHERE group_id = ? AND sender_id = ?",
             (group_id, user_id)
@@ -581,7 +766,9 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, current_user["id"])
         )
-        if not cursor.fetchone():
+        membership = cursor.fetchone()
+        print(f"Проверка членства: group_id={group_id}, user_id={current_user['id']}, result={membership}")
+        if not membership:
             raise HTTPException(status_code=403, detail="Not a member of this group")
 
         cursor.execute(
@@ -593,6 +780,7 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             (group_id,)
         )
         group = cursor.fetchone()
+        print(f"Группа: {group}")
         if not group:
             raise HTTPException(status_code=404, detail="Group not found")
 
@@ -601,6 +789,7 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             (group[4],)
         )
         creator = cursor.fetchone()
+        print(f"Создатель: {creator}")
         if not creator:
             raise HTTPException(status_code=404, detail="Creator not found")
 
@@ -617,6 +806,14 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             {"id": row[0], "username": row[1], "avatar_url": row[2]}
             for row in cursor.fetchall()
         ]
+        print(f"Участники группы {group_id}: {members}")
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM group_members WHERE group_id = ?",
+            (group_id,)
+        )
+        member_count = cursor.fetchone()[0]
+        print(f"Количество участников группы {group_id}: {member_count}")
 
         conn.close()
         return {
@@ -625,7 +822,8 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
             "description": group[2],
             "avatar_url": group[3],
             "creator": {"id": creator[0], "username": creator[1], "avatar_url": creator[2]},
-            "members": members
+            "members": members,
+            "member_count": member_count
         }
     except Exception as e:
         conn.close()
@@ -690,7 +888,7 @@ async def get_messages(receiver_id: int, current_user: dict = Depends(get_curren
     try:
         cursor.execute(
             """
-            SELECT m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read
+            SELECT m.id, m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
             FROM messages m
             JOIN users u ON m.sender_id = u.id
             WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
@@ -700,13 +898,15 @@ async def get_messages(receiver_id: int, current_user: dict = Depends(get_curren
         )
         messages = [
             {
-                "content": row[0],
-                "timestamp": row[1],
-                "sender_id": row[2],
-                "receiver_id": row[3],
-                "username": row[4],
-                "avatar_url": row[5],
-                "is_read": bool(row[6])
+                "id": row[0],  # Добавляем id
+                "content": row[1],
+                "timestamp": row[2],
+                "sender_id": row[3],
+                "receiver_id": row[4],
+                "username": row[5],
+                "avatar_url": row[6],
+                "is_read": bool(row[7]),
+                "files": json.loads(row[8]) if row[8] else None
             }
             for row in cursor.fetchall()]
         conn.close()
@@ -728,7 +928,7 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
             raise HTTPException(status_code=403, detail="Not a member of this group")
         cursor.execute(
             """
-            SELECT m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read
+            SELECT m.id, m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
             FROM messages m
             JOIN users u ON m.sender_id = u.id
             WHERE m.group_id = ?
@@ -738,13 +938,15 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
         )
         messages = [
             {
-                "content": row[0],
-                "timestamp": row[1],
-                "sender_id": row[2],
-                "receiver_id": row[3],
-                "username": row[4],
-                "avatar_url": row[5],
-                "is_read": bool(row[6])
+                "id": row[0],  # Добавляем id
+                "content": row[1],
+                "timestamp": row[2],
+                "sender_id": row[3],
+                "receiver_id": row[4],
+                "username": row[5],
+                "avatar_url": row[6],
+                "is_read": bool(row[7]),
+                "files": json.loads(row[8]) if row[8] else None
             }
             for row in cursor.fetchall()]
         conn.close()
@@ -752,6 +954,124 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=f"Failed to fetch group messages: {str(e)}")
+    
+@app.put("/messages/{message_id}/edit")
+async def edit_message(
+    message_id: int,
+    content: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        # Проверяем, что сообщение существует и принадлежит текущему пользователю
+        cursor.execute(
+            "SELECT sender_id, receiver_id, group_id, timestamp, files FROM messages WHERE id = ?",
+            (message_id,)
+        )
+        message = cursor.fetchone()
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        if message[0] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You can only edit your own messages")
+
+        # Проверяем, что content не пустой
+        if not content or len(content.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+        # Обновляем сообщение
+        cursor.execute(
+            "UPDATE messages SET content = ? WHERE id = ?",
+            (content, message_id)
+        )
+        conn.commit()
+
+        # Получаем информацию о пользователе для отправки через WebSocket
+        cursor.execute("SELECT username, avatar_url FROM users WHERE id = ?", (current_user["id"],))
+        user_data = cursor.fetchone()
+        username = user_data[0]
+        avatar_url = user_data[1]
+
+        # Формируем полное сообщение для WebSocket
+        message_data = {
+            "action": "edit",
+            "message_id": message_id,
+            "content": content,
+            "timestamp": message[3],
+            "sender_id": current_user["id"],
+            "receiver_id": message[1],
+            "group_id": message[2],
+            "username": username,
+            "avatar_url": avatar_url,
+            "is_read": False,  # При редактировании оставляем is_read как False
+            "files": json.loads(message[4]) if message[4] else None
+        }
+
+        if message[2]:  # Если это групповое сообщение
+            cursor.execute("SELECT user_id FROM group_members WHERE group_id = ?", (message[2],))
+            member_ids = [row[0] for row in cursor.fetchall()]
+            for member_id in member_ids:
+                await manager.send_personal_message(message_data, member_id)
+        else:  # Если это личное сообщение
+            await manager.send_personal_message(message_data, current_user["id"])
+            if message[1]:
+                await manager.send_personal_message(message_data, message[1])
+
+        return {"message": "Message edited successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to edit message: {str(e)}")
+    finally:
+        conn.close()
+        
+@app.delete("/messages/{message_id}")
+async def delete_message(
+    message_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        # Проверяем, что сообщение существует и принадлежит текущему пользователю
+        cursor.execute(
+            "SELECT sender_id, receiver_id, group_id FROM messages WHERE id = ?",
+            (message_id,)
+        )
+        message = cursor.fetchone()
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        if message[0] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You can only delete your own messages")
+
+        # Удаляем сообщение
+        cursor.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+        conn.commit()
+
+        # Отправляем уведомление об удалении всем участникам чата через WebSocket
+        message_data = {
+            "action": "delete",
+            "message_id": message_id,
+            "receiver_id": message[1],
+            "group_id": message[2]
+        }
+
+        if message[2]:  # Если это групповое сообщение
+            cursor.execute("SELECT user_id FROM group_members WHERE group_id = ?", (message[2],))
+            member_ids = [row[0] for row in cursor.fetchall()]
+            for member_id in member_ids:
+                await manager.send_personal_message(message_data, member_id)
+        else:  # Если это личное сообщение
+            await manager.send_personal_message(message_data, current_user["id"])
+            if message[1]:
+                await manager.send_personal_message(message_data, message[1])
+
+        return {"message": "Message deleted successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete message: {str(e)}")
+    finally:
+        conn.close()
+
 
 @app.post("/messages/{receiver_id}/mark-read")
 async def mark_messages_as_read(receiver_id: int, current_user: dict = Depends(get_current_user)):
@@ -866,35 +1186,64 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
+            
+            # Проверяем, является ли сообщение действием edit или delete
+            if "action" in message and message["action"] in ["edit", "delete"]:
+                # Просто пересылаем сообщение другим участникам без сохранения в базе
+                if "group_id" in message and message["group_id"]:
+                    conn = sqlite3.connect("chat.db")
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT user_id FROM group_members WHERE group_id = ?", (message["group_id"],))
+                    member_ids = [row[0] for row in cursor.fetchall()]
+                    conn.close()
+                    for member_id in member_ids:
+                        await manager.send_personal_message(message, member_id)
+                else:
+                    await manager.send_personal_message(message, user_id)
+                    if "receiver_id" in message and message["receiver_id"]:
+                        await manager.send_personal_message(message, message["receiver_id"])
+                continue  # Пропускаем дальнейшую обработку
+
+            # Обрабатываем как новое сообщение
             conn = sqlite3.connect("chat.db")
             cursor = conn.cursor()
             is_group_message = "group_id" in message and message["group_id"]
+
+            # Сохраняем сообщение в базе данных
+            files_json = json.dumps(message.get("files")) if message.get("files") else None
             cursor.execute(
-                "INSERT INTO messages (sender_id, receiver_id, group_id, content, timestamp, is_read) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO messages (sender_id, receiver_id, group_id, content, timestamp, is_read, files) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     user_id,
                     message.get("receiver_id"),
                     message.get("group_id"),
-                    message["content"],
+                    message.get("content"),
                     datetime.utcnow().isoformat(),
-                    0
+                    0,
+                    files_json
                 )
             )
+            message_id = cursor.lastrowid  # Получаем ID нового сообщения
             conn.commit()
+
             cursor.execute("SELECT username, avatar_url FROM users WHERE id = ?", (user_id,))
             user_data = cursor.fetchone()
             username = user_data[0]
             avatar_url = user_data[1]
+
             message_data = {
-                "content": message["content"],
+                "id": message_id,  # Добавляем ID сообщения
+                "content": message.get("content"),
                 "timestamp": datetime.utcnow().isoformat(),
                 "sender_id": user_id,
                 "receiver_id": message.get("receiver_id"),
                 "group_id": message.get("group_id"),
                 "username": username,
                 "avatar_url": avatar_url,
-                "is_read": False
+                "is_read": False,
+                "files": message.get("files")
             }
+
             if is_group_message:
                 cursor.execute("SELECT user_id FROM group_members WHERE group_id = ?", (message["group_id"],))
                 member_ids = [row[0] for row in cursor.fetchall()]
@@ -908,7 +1257,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         print(f"WebSocket error: {e}")
     finally:
         manager.disconnect(user_id)
-
+        
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
