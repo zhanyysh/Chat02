@@ -63,9 +63,10 @@ class UserInDB(User):
 class Token(BaseModel):
     access_token: str
     token_type: str
-
+    
 class Message(BaseModel):
-    content: str | None = None  # Теперь content может быть необязательным, если отправляется файл
+    id: int  # Добавляем поле id
+    content: str | None = None
     timestamp: str
     sender_id: int
     receiver_id: int | None = None
@@ -887,7 +888,7 @@ async def get_messages(receiver_id: int, current_user: dict = Depends(get_curren
     try:
         cursor.execute(
             """
-            SELECT m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
+            SELECT m.id, m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
             FROM messages m
             JOIN users u ON m.sender_id = u.id
             WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
@@ -897,14 +898,15 @@ async def get_messages(receiver_id: int, current_user: dict = Depends(get_curren
         )
         messages = [
             {
-                "content": row[0],
-                "timestamp": row[1],
-                "sender_id": row[2],
-                "receiver_id": row[3],
-                "username": row[4],
-                "avatar_url": row[5],
-                "is_read": bool(row[6]),
-                "files": json.loads(row[7]) if row[7] else None  # Декодируем JSON
+                "id": row[0],  # Добавляем id
+                "content": row[1],
+                "timestamp": row[2],
+                "sender_id": row[3],
+                "receiver_id": row[4],
+                "username": row[5],
+                "avatar_url": row[6],
+                "is_read": bool(row[7]),
+                "files": json.loads(row[8]) if row[8] else None
             }
             for row in cursor.fetchall()]
         conn.close()
@@ -926,7 +928,7 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
             raise HTTPException(status_code=403, detail="Not a member of this group")
         cursor.execute(
             """
-            SELECT m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
+            SELECT m.id, m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
             FROM messages m
             JOIN users u ON m.sender_id = u.id
             WHERE m.group_id = ?
@@ -936,14 +938,15 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
         )
         messages = [
             {
-                "content": row[0],
-                "timestamp": row[1],
-                "sender_id": row[2],
-                "receiver_id": row[3],
-                "username": row[4],
-                "avatar_url": row[5],
-                "is_read": bool(row[6]),
-                "files": json.loads(row[7]) if row[7] else None
+                "id": row[0],  # Добавляем id
+                "content": row[1],
+                "timestamp": row[2],
+                "sender_id": row[3],
+                "receiver_id": row[4],
+                "username": row[5],
+                "avatar_url": row[6],
+                "is_read": bool(row[7]),
+                "files": json.loads(row[8]) if row[8] else None
             }
             for row in cursor.fetchall()]
         conn.close()
@@ -952,6 +955,124 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
         conn.close()
         raise HTTPException(status_code=500, detail=f"Failed to fetch group messages: {str(e)}")
     
+@app.put("/messages/{message_id}/edit")
+async def edit_message(
+    message_id: int,
+    content: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        # Проверяем, что сообщение существует и принадлежит текущему пользователю
+        cursor.execute(
+            "SELECT sender_id, receiver_id, group_id, timestamp, files FROM messages WHERE id = ?",
+            (message_id,)
+        )
+        message = cursor.fetchone()
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        if message[0] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You can only edit your own messages")
+
+        # Проверяем, что content не пустой
+        if not content or len(content.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+        # Обновляем сообщение
+        cursor.execute(
+            "UPDATE messages SET content = ? WHERE id = ?",
+            (content, message_id)
+        )
+        conn.commit()
+
+        # Получаем информацию о пользователе для отправки через WebSocket
+        cursor.execute("SELECT username, avatar_url FROM users WHERE id = ?", (current_user["id"],))
+        user_data = cursor.fetchone()
+        username = user_data[0]
+        avatar_url = user_data[1]
+
+        # Формируем полное сообщение для WebSocket
+        message_data = {
+            "action": "edit",
+            "message_id": message_id,
+            "content": content,
+            "timestamp": message[3],
+            "sender_id": current_user["id"],
+            "receiver_id": message[1],
+            "group_id": message[2],
+            "username": username,
+            "avatar_url": avatar_url,
+            "is_read": False,  # При редактировании оставляем is_read как False
+            "files": json.loads(message[4]) if message[4] else None
+        }
+
+        if message[2]:  # Если это групповое сообщение
+            cursor.execute("SELECT user_id FROM group_members WHERE group_id = ?", (message[2],))
+            member_ids = [row[0] for row in cursor.fetchall()]
+            for member_id in member_ids:
+                await manager.send_personal_message(message_data, member_id)
+        else:  # Если это личное сообщение
+            await manager.send_personal_message(message_data, current_user["id"])
+            if message[1]:
+                await manager.send_personal_message(message_data, message[1])
+
+        return {"message": "Message edited successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to edit message: {str(e)}")
+    finally:
+        conn.close()
+        
+@app.delete("/messages/{message_id}")
+async def delete_message(
+    message_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        # Проверяем, что сообщение существует и принадлежит текущему пользователю
+        cursor.execute(
+            "SELECT sender_id, receiver_id, group_id FROM messages WHERE id = ?",
+            (message_id,)
+        )
+        message = cursor.fetchone()
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        if message[0] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You can only delete your own messages")
+
+        # Удаляем сообщение
+        cursor.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+        conn.commit()
+
+        # Отправляем уведомление об удалении всем участникам чата через WebSocket
+        message_data = {
+            "action": "delete",
+            "message_id": message_id,
+            "receiver_id": message[1],
+            "group_id": message[2]
+        }
+
+        if message[2]:  # Если это групповое сообщение
+            cursor.execute("SELECT user_id FROM group_members WHERE group_id = ?", (message[2],))
+            member_ids = [row[0] for row in cursor.fetchall()]
+            for member_id in member_ids:
+                await manager.send_personal_message(message_data, member_id)
+        else:  # Если это личное сообщение
+            await manager.send_personal_message(message_data, current_user["id"])
+            if message[1]:
+                await manager.send_personal_message(message_data, message[1])
+
+        return {"message": "Message deleted successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete message: {str(e)}")
+    finally:
+        conn.close()
+
+
 @app.post("/messages/{receiver_id}/mark-read")
 async def mark_messages_as_read(receiver_id: int, current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect("chat.db")
@@ -1065,6 +1186,25 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
+            
+            # Проверяем, является ли сообщение действием edit или delete
+            if "action" in message and message["action"] in ["edit", "delete"]:
+                # Просто пересылаем сообщение другим участникам без сохранения в базе
+                if "group_id" in message and message["group_id"]:
+                    conn = sqlite3.connect("chat.db")
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT user_id FROM group_members WHERE group_id = ?", (message["group_id"],))
+                    member_ids = [row[0] for row in cursor.fetchall()]
+                    conn.close()
+                    for member_id in member_ids:
+                        await manager.send_personal_message(message, member_id)
+                else:
+                    await manager.send_personal_message(message, user_id)
+                    if "receiver_id" in message and message["receiver_id"]:
+                        await manager.send_personal_message(message, message["receiver_id"])
+                continue  # Пропускаем дальнейшую обработку
+
+            # Обрабатываем как новое сообщение
             conn = sqlite3.connect("chat.db")
             cursor = conn.cursor()
             is_group_message = "group_id" in message and message["group_id"]
@@ -1083,6 +1223,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                     files_json
                 )
             )
+            message_id = cursor.lastrowid  # Получаем ID нового сообщения
             conn.commit()
 
             cursor.execute("SELECT username, avatar_url FROM users WHERE id = ?", (user_id,))
@@ -1091,6 +1232,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             avatar_url = user_data[1]
 
             message_data = {
+                "id": message_id,  # Добавляем ID сообщения
                 "content": message.get("content"),
                 "timestamp": datetime.utcnow().isoformat(),
                 "sender_id": user_id,
@@ -1099,7 +1241,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                 "username": username,
                 "avatar_url": avatar_url,
                 "is_read": False,
-                "files": message.get("files")  # Передаём список файлов
+                "files": message.get("files")
             }
 
             if is_group_message:
@@ -1115,6 +1257,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         print(f"WebSocket error: {e}")
     finally:
         manager.disconnect(user_id)
+        
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

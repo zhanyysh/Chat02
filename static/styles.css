@@ -1410,6 +1410,63 @@ body {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
+.message-options {
+    position: absolute;
+    background: #354469;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    width: 150px;
+}
+
+.message-options button {
+    background: #354469;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 14px;
+    transition: background 0.3s ease, transform 0.3s ease;
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.message-options button:last-child {
+    margin-bottom: 0;
+}
+
+.message-options button:hover {
+    background: #3D5B97;
+    transform: scale(1.05);
+}
+
+.message-options button svg {
+    margin-right: 8px;
+}
+
+/* Стили для поля редактирования сообщения */
+.edit-message-input {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 16px;
+    transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.edit-message-input:focus {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.02);
+    outline: none;
+}
 
 
 /* Обновим .chat-form для правильного позиционирования */
