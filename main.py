@@ -29,6 +29,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 AVATARS_DIR = "static/avatars"
 if not os.path.exists(AVATARS_DIR):
     os.makedirs(AVATARS_DIR)
+    
+# Ensure uploads directory exists
+UPLOADS_DIR = "static/uploads"
+if not os.path.exists(UPLOADS_DIR):
+    os.makedirs(UPLOADS_DIR)
 
 # SMTP Configuration
 SMTP_HOST = "smtp.gmail.com"
@@ -60,7 +65,7 @@ class Token(BaseModel):
     token_type: str
 
 class Message(BaseModel):
-    content: str
+    content: str | None = None  # Теперь content может быть необязательным, если отправляется файл
     timestamp: str
     sender_id: int
     receiver_id: int | None = None
@@ -68,6 +73,7 @@ class Message(BaseModel):
     username: str
     avatar_url: str | None = None
     is_read: bool = False
+    files: List[Dict[str, str]] | None = None
 
 class RecentChat(BaseModel):
     user_id: int | None = None
@@ -118,9 +124,10 @@ def init_db():
             sender_id INTEGER,
             receiver_id INTEGER,
             group_id INTEGER,
-            content TEXT NOT NULL,
+            content TEXT,
             timestamp TEXT NOT NULL,
             is_read INTEGER DEFAULT 0,
+            files TEXT,  -- Храним список файлов как JSON-строку
             FOREIGN KEY (sender_id) REFERENCES users(id),
             FOREIGN KEY (receiver_id) REFERENCES users(id),
             FOREIGN KEY (group_id) REFERENCES groups(id)
@@ -156,7 +163,7 @@ def init_db():
     """)
     conn.commit()
     conn.close()
-
+    
 init_db()
 
 class ConnectionManager:
@@ -373,6 +380,35 @@ async def reset_password(
     conn.commit()
     conn.close()
     return {"message": "Пароль успешно сброшен"}
+
+@app.post("/upload-file")
+async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    print(f"Получен запрос на загрузку файла от пользователя {current_user['id']}, имя файла: {file.filename}")  # Логируем запрос
+    allowed_image_types = ["image/jpeg", "image/png", "image/gif"]
+    allowed_video_types = ["video/mp4", "video/webm"]
+    allowed_file_types = ["application/pdf", "text/plain"]
+
+    file_type = None
+    if file.content_type in allowed_image_types:
+        file_type = "image"
+    elif file.content_type in allowed_video_types:
+        file_type = "video"
+    elif file.content_type in allowed_file_types:
+        file_type = "file"
+    else:
+        print(f"Неподдерживаемый тип файла: {file.content_type}")
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    filename = f"{current_user['id']}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+    file_path = os.path.join(UPLOADS_DIR, filename)
+
+    print(f"Сохраняю файл по пути: {file_path}")
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    file_url = f"/static/uploads/{filename}"
+    print(f"Файл успешно сохранён, возвращаю file_url: {file_url}, file_type: {file_type}")
+    return {"file_url": file_url, "file_type": file_type}
 
 @app.get("/chat", response_class=HTMLResponse)
 async def get_chat(request: Request, current_user: dict = Depends(get_current_user)):
@@ -851,7 +887,7 @@ async def get_messages(receiver_id: int, current_user: dict = Depends(get_curren
     try:
         cursor.execute(
             """
-            SELECT m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read
+            SELECT m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
             FROM messages m
             JOIN users u ON m.sender_id = u.id
             WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
@@ -867,7 +903,8 @@ async def get_messages(receiver_id: int, current_user: dict = Depends(get_curren
                 "receiver_id": row[3],
                 "username": row[4],
                 "avatar_url": row[5],
-                "is_read": bool(row[6])
+                "is_read": bool(row[6]),
+                "files": json.loads(row[7]) if row[7] else None  # Декодируем JSON
             }
             for row in cursor.fetchall()]
         conn.close()
@@ -889,7 +926,7 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
             raise HTTPException(status_code=403, detail="Not a member of this group")
         cursor.execute(
             """
-            SELECT m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read
+            SELECT m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
             FROM messages m
             JOIN users u ON m.sender_id = u.id
             WHERE m.group_id = ?
@@ -905,7 +942,8 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
                 "receiver_id": row[3],
                 "username": row[4],
                 "avatar_url": row[5],
-                "is_read": bool(row[6])
+                "is_read": bool(row[6]),
+                "files": json.loads(row[7]) if row[7] else None
             }
             for row in cursor.fetchall()]
         conn.close()
@@ -913,7 +951,7 @@ async def get_group_messages(group_id: int, current_user: dict = Depends(get_cur
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=f"Failed to fetch group messages: {str(e)}")
-
+    
 @app.post("/messages/{receiver_id}/mark-read")
 async def mark_messages_as_read(receiver_id: int, current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect("chat.db")
@@ -1030,32 +1068,40 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             conn = sqlite3.connect("chat.db")
             cursor = conn.cursor()
             is_group_message = "group_id" in message and message["group_id"]
+
+            # Сохраняем сообщение в базе данных
+            files_json = json.dumps(message.get("files")) if message.get("files") else None
             cursor.execute(
-                "INSERT INTO messages (sender_id, receiver_id, group_id, content, timestamp, is_read) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO messages (sender_id, receiver_id, group_id, content, timestamp, is_read, files) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     user_id,
                     message.get("receiver_id"),
                     message.get("group_id"),
-                    message["content"],
+                    message.get("content"),
                     datetime.utcnow().isoformat(),
-                    0
+                    0,
+                    files_json
                 )
             )
             conn.commit()
+
             cursor.execute("SELECT username, avatar_url FROM users WHERE id = ?", (user_id,))
             user_data = cursor.fetchone()
             username = user_data[0]
             avatar_url = user_data[1]
+
             message_data = {
-                "content": message["content"],
+                "content": message.get("content"),
                 "timestamp": datetime.utcnow().isoformat(),
                 "sender_id": user_id,
                 "receiver_id": message.get("receiver_id"),
                 "group_id": message.get("group_id"),
                 "username": username,
                 "avatar_url": avatar_url,
-                "is_read": False
+                "is_read": False,
+                "files": message.get("files")  # Передаём список файлов
             }
+
             if is_group_message:
                 cursor.execute("SELECT user_id FROM group_members WHERE group_id = ?", (message["group_id"],))
                 member_ids = [row[0] for row in cursor.fetchall()]
@@ -1069,7 +1115,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         print(f"WebSocket error: {e}")
     finally:
         manager.disconnect(user_id)
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
