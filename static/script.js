@@ -600,7 +600,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('photoVideoUpload:', photoVideoUpload);
         console.log('previewContainer:', previewContainer);
         console.log('previewImages:', previewImages);
+        
+        // Кнопка для открытия панели emoji
+        const emojiBtn = document.getElementById('emoji-btn');
+        const emojiPanel = document.getElementById('emoji-panel');
+        // Удаляем повторное объявление messageInput, так как оно уже есть выше
+        // const messageInput = document.getElementById('message-input');
 
+        if (emojiBtn && emojiPanel) {
+            emojiBtn.addEventListener('click', () => {
+                console.log('Нажата кнопка смайлика');
+                emojiPanel.classList.toggle('active');
+            });
+
+            // Закрываем панель при клике вне её
+            document.addEventListener('click', (e) => {
+                if (!emojiBtn.contains(e.target) && !emojiPanel.contains(e.target)) {
+                    emojiPanel.classList.remove('active');
+                }
+            });
+
+            // Обработчик для выбора emoji
+            emojiPanel.addEventListener('click', (e) => {
+                const emoji = e.target.closest('.emoji');
+                if (emoji) {
+                    const emojiChar = emoji.dataset.emoji;
+                    console.log('Выбран emoji:', emojiChar);
+                    messageInput.value += emojiChar;
+                    messageInput.focus();
+                    emojiPanel.classList.remove('active');
+                }
+            });
+        } else {
+            console.error('Кнопка смайлика или панель emoji не найдены');
+        }
+        
         if (attachmentBtn && attachmentMenu) {
             attachmentBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка скрепки');
