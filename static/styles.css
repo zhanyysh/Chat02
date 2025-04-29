@@ -1672,7 +1672,13 @@ body {
     position: relative;
 }
 
-/* Стили для кнопки смайлика */
+/* Контейнер для кнопки и панели emoji */
+.emoji-container {
+    position: relative; /* Изолируем контекст позиционирования */
+    display: inline-flex;
+    align-items: center;
+}
+
 /* Стили для кнопки смайлика */
 .emoji-btn {
     background: rgba(255, 255, 255, 0.1);
@@ -1680,15 +1686,15 @@ body {
     color: #fff;
     font-size: 18px;
     cursor: pointer;
-    padding: 0; /* Убираем padding, чтобы он не влиял на центрирование */
+    padding: 0;
     width: 40px;
     height: 40px;
     border-radius: 50%;
     margin-right: 10px;
     transition: background 0.3s ease, transform 0.3s ease;
-    display: flex; /* Используем flex для центрирования */
-    align-items: center; /* Центрируем по вертикали */
-    justify-content: center; /* Центрируем по горизонтали */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .emoji-btn:hover {
@@ -1698,29 +1704,118 @@ body {
 
 .emoji-panel {
     position: absolute;
-    bottom: 70px; /* Располагаем панель над формой */
-    left: 70px; /* Смещаем, чтобы не перекрывать кнопку скрепки */
+    bottom: calc(100% + 10px); /* Размещаем панель над кнопкой с отступом */
+    left: 50%; /* Центрируем панель по горизонтали относительно кнопки */
+    transform: translateX(-50%) translateY(-10px); /* Центрирование по X и начальное смещение по Y */
     display: none;
-    flex-wrap: wrap;
     background: #354469;
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     z-index: 20;
     padding: 10px;
-    width: 200px;
-    transform: translateY(10px);
+    width: 280px; /* Увеличиваем ширину для вмещения большего количества эмодзи */
+    max-height: 300px; /* Ограничиваем высоту */
     opacity: 0;
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .emoji-panel.active {
-    display: flex;
-    transform: translateY(0);
+    display: block;
     opacity: 1;
+    transform: translateX(-95%) translateY(0); /* Плавное появление с сохранением центрирования */
+}
+
+/* Вкладки категорий */
+.emoji-tabs {
+    display: flex;
+    justify-content: flex-start; /* Выравниваем вкладки слева */
+    margin-bottom: 2px; /* Минимальный отступ до контента */
+    overflow-x: auto;
+    background: none; /* Убедимся, что фон отсутствует */
+}
+
+.emoji-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.emoji-tabs {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.emoji-tab {
+    background: none;
+    border: none;
+    color: inherit; /* Убираем цвет текста */
+    opacity: 0.5; /* Полупрозрачность для неактивных вкладок */
+    font-size: 16px; /* Уменьшаем размер эмодзи на вкладках */
+    cursor: pointer;
+    padding: 0; /* Убираем padding */
+    margin: 0 3px; /* Уменьшаем отступ между вкладками */
+    transition: opacity 0.3s ease; /* Плавное изменение прозрачности */
+    line-height: 1; /* Уменьшаем высоту строки */
+    width: 60px; /* Фиксированная ширина для вкладок */
+    height: 30px;
+    display: flex; /* Добавляем flex для центрирования */
+    align-items: center; /* Центрируем по вертикали */
+    justify-content: center; /* Центрируем по горизонтали */
+}
+
+.emoji-tab:hover {
+    opacity: 0.8; /* При наведении увеличиваем видимость */
+}
+
+.emoji-tab.active {
+    opacity: 1; /* Активная вкладка полностью видимая */
+    border-bottom: 2px solid #3498db; /* Тонкая линия снизу для активной вкладки */
+}
+
+/* Контейнеры для эмодзи */
+.emoji-content {
+    max-height: 250px; /* Увеличиваем высоту контента */
+    overflow-y: auto;
+}
+
+.emoji-content::-webkit-scrollbar {
+    width: 5px;
+}
+
+.emoji-content::-webkit-scrollbar-thumb {
+    background: #3498db;
+    border-radius: 5px;
+}
+
+.emoji-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.emoji-category {
+    display: none;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.emoji-category.active {
+    display: flex;
+}
+
+/* Защита от выхода за правый край */
+@media (max-width: 400px) {
+    .emoji-panel {
+        width: 220px;
+        left: 50%; /* Сохраняем центрирование */
+        transform: translateX(-50%) translateY(-10px);
+    }
+    .emoji-panel.active {
+        transform: translateX(-50%) translateY(0);
+    }
+    .emoji-tab {
+        margin: 0 2px; /* Ещё меньше отступ на узких экранах */
+    }
 }
 
 .emoji-panel .emoji {
-    font-size: 20px;
+    font-size: 20px; /* Сохраняем размер эмодзи в категориях */
     padding: 5px;
     cursor: pointer;
     transition: transform 0.3s ease;
@@ -1729,6 +1824,7 @@ body {
 .emoji-panel .emoji:hover {
     transform: scale(1.2);
 }
+
 
 #message-input:focus {
     background: rgba(255, 255, 255, 0.2);
