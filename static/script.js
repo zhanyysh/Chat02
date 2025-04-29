@@ -680,41 +680,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Обработчик отправки формы
         if (chatForm) {
             chatForm.addEventListener('submit', async (e) => {
-                e.preventDefault(); // Предотвращаем стандартную отправку формы
-                const message = messageInput.value.trim();
-                if (!message && selectedFiles.length === 0) {
-                    console.log('Сообщение пустое, не отправляю');
+                e.preventDefault();
+                console.log('Форма чата отправлена');
+                if (!currentChatUserId && !currentGroupId) {
+                    showFlashMessage('Выберите чат или группу', 'warning');
+                    return;
+                }
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    showFlashMessage('WebSocket не подключен, обновите страницу', 'danger');
                     return;
                 }
 
-                const messageData = {
-                    content: message,
-                    files: selectedFiles,
-                };
-                if (currentChatUserId) {
-                    messageData.receiver_id = currentChatUserId;
-                } else if (currentGroupId) {
-                    messageData.group_id = currentGroupId;
-                } else {
-                    console.error('Не выбран получатель или группа для отправки сообщения');
-                    return;
+                const content = messageInput.value.trim();
+                let fileDataList = [];
+
+                // Загружаем все файлы и собираем их данные
+                if (selectedFiles.length > 0) {
+                    try {
+                        for (const file of selectedFiles) {
+                            const fileData = await uploadAndSendFile(file);
+                            fileDataList.push(fileData);
+                        }
+                    } catch (error) {
+                        console.error('Ошибка при загрузке файлов:', error);
+                        return;
+                    }
                 }
 
-                try {
+                // Отправляем одно сообщение с текстом и всеми файлами
+                if (content || fileDataList.length > 0) {
+                    const messageData = {
+                        content: content || null,
+                        receiver_id: currentChatUserId,
+                        group_id: currentGroupId,
+                        files: fileDataList.length > 0 ? fileDataList : null // Список файлов
+                    };
+                    console.log('Отправляю сообщение через WebSocket:', messageData);
                     ws.send(JSON.stringify(messageData));
                     messageInput.value = '';
                     selectedFiles = [];
-                    previewContainer.style.display = 'none';
-                    previewImages.innerHTML = '';
-                } catch (error) {
-                    console.error('Ошибка отправки сообщения:', error);
-                    showFlashMessage('Ошибка отправки сообщения.', 'danger');
+                    updatePreview();
+                    hasInteracted = true;
+                    updateUnreadDivider();
                 }
             });
-        } else {
-            console.error('Форма чата не найдена');
         }
-
 
         if (photoVideoUpload) {
             photoVideoUpload.addEventListener('change', (e) => {
@@ -838,6 +848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 throw error;
             }
         }
+
 
         document.addEventListener('click', (e) => {
             const mediaLink = e.target.closest('.media-link');
