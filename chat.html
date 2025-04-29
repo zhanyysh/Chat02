@@ -42,7 +42,7 @@
             </div>
             <div class="chat-messages" id="chat-messages"></div>
             <form class="chat-form" id="chat-form">
-                <!-- Кнопка со скрепкой -->
+                <!-- Кнопка скрепки -->
                 <button type="button" class="attachment-btn" id="attachment-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M19.5 12.5l-7 7a5 5 0 01-7-7l7-7a3 3 0 014.24 4.24l-7 7a1 1 0 01-1.41-1.41l6.29-6.29"/>
@@ -72,20 +72,267 @@
                 <input type="file" id="photo-video-upload" accept="image/*,video/*" multiple style="display: none;">
                 <input type="file" id="file-upload" accept=".pdf,.txt" style="display: none;">
                 <input type="text" id="message-input" placeholder="Введите сообщение...">
-                <!-- Кнопка для открытия панели emoji -->
-                <button type="button" class="emoji-btn" id="emoji-btn">😊</button>
-                <!-- Панель с emoji -->
-                <div class="emoji-panel" id="emoji-panel">
-                    <span class="emoji" data-emoji="😊">😊</span>
-                    <span class="emoji" data-emoji="😂">😂</span>
-                    <span class="emoji" data-emoji="😍">😍</span>
-                    <span class="emoji" data-emoji="🥳">🥳</span>
-                    <span class="emoji" data-emoji="😢">😢</span>
-                    <span class="emoji" data-emoji="👍">👍</span>
-                    <span class="emoji" data-emoji="❤️">❤️</span>
-                    <span class="emoji" data-emoji="🔥">🔥</span>
-                    <span class="emoji" data-emoji="💡">💡</span>
-                    <span class="emoji" data-emoji="🌟">🌟</span>
+                <!-- Контейнер для кнопки и панели emoji -->
+                <div class="emoji-container">
+                    <!-- Кнопка для открытия панели emoji -->
+                    <button type="button" class="emoji-btn" id="emoji-btn">😊</button>
+                    <!-- Панель с emoji -->
+                    <div class="emoji-panel" id="emoji-panel">
+                        <!-- Вкладки категорий -->
+                        <div class="emoji-tabs">
+                            <button class="emoji-tab active" data-category="smileys">😊</button>
+                            <button class="emoji-tab" data-category="food">🍎</button>
+                            <button class="emoji-tab" data-category="travel">🚗</button>
+                            <button class="emoji-tab" data-category="activities">⚽</button>
+                            <button class="emoji-tab" data-category="objects">⌚</button>
+                            <button class="emoji-tab" data-category="symbols">❤</button>
+                            <button class="emoji-tab" data-category="flags">🏁</button>
+                        </div>
+                        <!-- Контейнеры для эмодзи -->
+                        <div class="emoji-content">
+                            <!-- Smileys -->
+                            <div class="emoji-category active" id="smileys">
+                                <span class="emoji" data-emoji="😊">😊</span>
+                                <span class="emoji" data-emoji="😂">😂</span>
+                                <span class="emoji" data-emoji="😍">😍</span>
+                                <span class="emoji" data-emoji="🥳">🥳</span>
+                                <span class="emoji" data-emoji="😢">😢</span>
+                                <span class="emoji" data-emoji="👍">👍</span>
+                                <span class="emoji" data-emoji="❤️">❤️</span>
+                                <span class="emoji" data-emoji="🔥">🔥</span>
+                                <span class="emoji" data-emoji="💡">💡</span>
+                                <span class="emoji" data-emoji="🌟">🌟</span>
+                            </div>
+                            <!-- Food -->
+                            <div class="emoji-category" id="food">
+                                <span class="emoji" data-emoji="🥯">🥯</span>
+                                <span class="emoji" data-emoji="🍞">🍞</span>
+                                <span class="emoji" data-emoji="🥖">🥖</span>
+                                <span class="emoji" data-emoji="🥨">🥨</span>
+                                <span class="emoji" data-emoji="🧀">🧀</span>
+                                <span class="emoji" data-emoji="🥚">🥚</span>
+                                <span class="emoji" data-emoji="🍳">🍳</span>
+                                <span class="emoji" data-emoji="🧈">🧈</span>
+                                <span class="emoji" data-emoji="🥞">🥞</span>
+                                <span class="emoji" data-emoji="🧇">🧇</span>
+                            </div>
+                            <!-- Travel -->
+                            <div class="emoji-category" id="travel">
+                                <span class="emoji" data-emoji="🚗">🚗</span>
+                                <span class="emoji" data-emoji="🚕">🚕</span>
+                                <span class="emoji" data-emoji="🚙">🚙</span>
+                                <span class="emoji" data-emoji="🚌">🚌</span>
+                                <span class="emoji" data-emoji="🚎">🚎</span>
+                                <span class="emoji" data-emoji="🏎">🏎</span>
+                                <span class="emoji" data-emoji="🚓">🚓</span>
+                                <span class="emoji" data-emoji="🚑">🚑</span>
+                                <span class="emoji" data-emoji="🚒">🚒</span>
+                                <span class="emoji" data-emoji="🚐">🚐</span>
+                                <span class="emoji" data-emoji="🚚">🚚</span>
+                                <span class="emoji" data-emoji="🚛">🚛</span>
+                                <span class="emoji" data-emoji="🚜">🚜</span>
+                                <span class="emoji" data-emoji="🦯">🦯</span>
+                                <span class="emoji" data-emoji="🦽">🦽</span>
+                                <span class="emoji" data-emoji="🦼">🦼</span>
+                                <span class="emoji" data-emoji="🛴">🛴</span>
+                                <span class="emoji" data-emoji="🚲">🚲</span>
+                                <span class="emoji" data-emoji="🛵">🛵</span>
+                                <span class="emoji" data-emoji="🏍">🏍</span>
+                                <span class="emoji" data-emoji="🛺">🛺</span>
+                                <span class="emoji" data-emoji="🚨">🚨</span>
+                                <span class="emoji" data-emoji="🚔">🚔</span>
+                                <span class="emoji" data-emoji="🚍">🚍</span>
+                                <span class="emoji" data-emoji="🚘">🚘</span>
+                                <span class="emoji" data-emoji="🚖">🚖</span>
+                                <span class="emoji" data-emoji="🚡">🚡</span>
+                                <span class="emoji" data-emoji="🚠">🚠</span>
+                                <span class="emoji" data-emoji="🚟">🚟</span>
+                                <span class="emoji" data-emoji="🚃">🚃</span>
+                                <span class="emoji" data-emoji="🚋">🚋</span>
+                                <span class="emoji" data-emoji="🚞">🚞</span>
+                                <span class="emoji" data-emoji="🚝">🚝</span>
+                                <span class="emoji" data-emoji="🚄">🚄</span>
+                                <span class="emoji" data-emoji="🚅">🚅</span>
+                                <span class="emoji" data-emoji="🚈">🚈</span>
+                                <span class="emoji" data-emoji="🚂">🚂</span>
+                                <span class="emoji" data-emoji="🚆">🚆</span>
+                                <span class="emoji" data-emoji="🚇">🚇</span>
+                                <span class="emoji" data-emoji="🚊">🚊</span>
+                            </div>
+                            <!-- Activities -->
+                            <div class="emoji-category" id="activities">
+                                <span class="emoji" data-emoji="⚽">⚽</span>
+                                <span class="emoji" data-emoji="🏀">🏀</span>
+                                <span class="emoji" data-emoji="🏈">🏈</span>
+                                <span class="emoji" data-emoji="⚾">⚾</span>
+                                <span class="emoji" data-emoji="🥎">🥎</span>
+                                <span class="emoji" data-emoji="🎾">🎾</span>
+                                <span class="emoji" data-emoji="🏐">🏐</span>
+                                <span class="emoji" data-emoji="🏉">🏉</span>
+                                <span class="emoji" data-emoji="🥏">🥏</span>
+                                <span class="emoji" data-emoji="🎱">🎱</span>
+                                <span class="emoji" data-emoji="🪀">🪀</span>
+                                <span class="emoji" data-emoji="🏓">🏓</span>
+                                <span class="emoji" data-emoji="🏸">🏸</span>
+                                <span class="emoji" data-emoji="🏒">🏒</span>
+                                <span class="emoji" data-emoji="🏑">🏑</span>
+                                <span class="emoji" data-emoji="🥍">🥍</span>
+                                <span class="emoji" data-emoji="🏏">🏏</span>
+                                <span class="emoji" data-emoji="🥅">🥅</span>
+                                <span class="emoji" data-emoji="⛳">⛳</span>
+                                <span class="emoji" data-emoji="🪁">🪁</span>
+                                <span class="emoji" data-emoji="🏹">🏹</span>
+                                <span class="emoji" data-emoji="🎣">🎣</span>
+                                <span class="emoji" data-emoji="🤿">🤿</span>
+                                <span class="emoji" data-emoji="🥊">🥊</span>
+                                <span class="emoji" data-emoji="🥋">🥋</span>
+                                <span class="emoji" data-emoji="🎽">🎽</span>
+                                <span class="emoji" data-emoji="🛹">🛹</span>
+                                <span class="emoji" data-emoji="🛷">🛷</span>
+                                <span class="emoji" data-emoji="⛸">⛸</span>
+                                <span class="emoji" data-emoji="🥌">🥌</span>
+                                <span class="emoji" data-emoji="🎿">🎿</span>
+                                <span class="emoji" data-emoji="⛷">⛷</span>
+                                <span class="emoji" data-emoji="🏂">🏂</span>
+                                <span class="emoji" data-emoji="🪂">🪂</span>
+                                <span class="emoji" data-emoji="🏋">🏋</span>
+                                <span class="emoji" data-emoji="🤼">🤼</span>
+                                <span class="emoji" data-emoji="🤸">🤸</span>
+                                <span class="emoji" data-emoji="🤺">🤺</span>
+                                <span class="emoji" data-emoji="⛹">⛹</span>
+                                <span class="emoji" data-emoji="🤾">🤾</span>
+                            </div>
+                            <!-- Objects -->
+                            <div class="emoji-category" id="objects">
+                                <span class="emoji" data-emoji="⌚">⌚</span>
+                                <span class="emoji" data-emoji="📱">📱</span>
+                                <span class="emoji" data-emoji="📲">📲</span>
+                                <span class="emoji" data-emoji="💻">💻</span>
+                                <span class="emoji" data-emoji="⌨">⌨</span>
+                                <span class="emoji" data-emoji="🖥">🖥</span>
+                                <span class="emoji" data-emoji="🖨">🖨</span>
+                                <span class="emoji" data-emoji="🖱">🖱</span>
+                                <span class="emoji" data-emoji="🖲">🖲</span>
+                                <span class="emoji" data-emoji="🕹">🕹</span>
+                                <span class="emoji" data-emoji="🗜">🗜</span>
+                                <span class="emoji" data-emoji="💽">💽</span>
+                                <span class="emoji" data-emoji="💾">💾</span>
+                                <span class="emoji" data-emoji="💿">💿</span>
+                                <span class="emoji" data-emoji="📀">📀</span>
+                                <span class="emoji" data-emoji="📼">📼</span>
+                                <span class="emoji" data-emoji="📷">📷</span>
+                                <span class="emoji" data-emoji="📸">📸</span>
+                                <span class="emoji" data-emoji="📹">📹</span>
+                                <span class="emoji" data-emoji="🎥">🎥</span>
+                                <span class="emoji" data-emoji="📽">📽</span>
+                                <span class="emoji" data-emoji="🎞">🎞</span>
+                                <span class="emoji" data-emoji="📞">📞</span>
+                                <span class="emoji" data-emoji="☎">☎</span>
+                                <span class="emoji" data-emoji="📟">📟</span>
+                                <span class="emoji" data-emoji="📠">📠</span>
+                                <span class="emoji" data-emoji="📺">📺</span>
+                                <span class="emoji" data-emoji="📻">📻</span>
+                                <span class="emoji" data-emoji="🎙">🎙</span>
+                                <span class="emoji" data-emoji="🎚">🎚</span>
+                                <span class="emoji" data-emoji="🎛">🎛</span>
+                                <span class="emoji" data-emoji="🧭">🧭</span>
+                                <span class="emoji" data-emoji="⏱">⏱</span>
+                                <span class="emoji" data-emoji="⏲">⏲</span>
+                                <span class="emoji" data-emoji="⏰">⏰</span>
+                                <span class="emoji" data-emoji="🕰">🕰</span>
+                                <span class="emoji" data-emoji="⌛">⌛</span>
+                                <span class="emoji" data-emoji="⏳">⏳</span>
+                                <span class="emoji" data-emoji="📡">📡</span>
+                                <span class="emoji" data-emoji="🔋">🔋</span>
+                            </div>
+                            <!-- Symbols -->
+                            <div class="emoji-category" id="symbols">
+                                <span class="emoji" data-emoji="❤">❤</span>
+                                <span class="emoji" data-emoji="🧡">🧡</span>
+                                <span class="emoji" data-emoji="💛">💛</span>
+                                <span class="emoji" data-emoji="💚">💚</span>
+                                <span class="emoji" data-emoji="💙">💙</span>
+                                <span class="emoji" data-emoji="💜">💜</span>
+                                <span class="emoji" data-emoji="🖤">🖤</span>
+                                <span class="emoji" data-emoji="🤍">🤍</span>
+                                <span class="emoji" data-emoji="🤎">🤎</span>
+                                <span class="emoji" data-emoji="💔">💔</span>
+                                <span class="emoji" data-emoji="❣">❣</span>
+                                <span class="emoji" data-emoji="💕">💕</span>
+                                <span class="emoji" data-emoji="💞">💞</span>
+                                <span class="emoji" data-emoji="💓">💓</span>
+                                <span class="emoji" data-emoji="💗">💗</span>
+                                <span class="emoji" data-emoji="💖">💖</span>
+                                <span class="emoji" data-emoji="💘">💘</span>
+                                <span class="emoji" data-emoji="💝">💝</span>
+                                <span class="emoji" data-emoji="💟">💟</span>
+                                <span class="emoji" data-emoji="☮">☮</span>
+                                <span class="emoji" data-emoji="✝">✝</span>
+                                <span class="emoji" data-emoji="☪">☪</span>
+                                <span class="emoji" data-emoji="🕉">🕉</span>
+                                <span class="emoji" data-emoji="☸">☸</span>
+                                <span class="emoji" data-emoji="✡">✡</span>
+                                <span class="emoji" data-emoji="🔯">🔯</span>
+                                <span class="emoji" data-emoji="🕎">🕎</span>
+                                <span class="emoji" data-emoji="☯">☯</span>
+                                <span class="emoji" data-emoji="☦">☦</span>
+                                <span class="emoji" data-emoji="🛐">🛐</span>
+                                <span class="emoji" data-emoji="⛎">⛎</span>
+                                <span class="emoji" data-emoji="♈">♈</span>
+                                <span class="emoji" data-emoji="♉">♉</span>
+                                <span class="emoji" data-emoji="♊">♊</span>
+                                <span class="emoji" data-emoji="♋">♋</span>
+                                <span class="emoji" data-emoji="♌">♌</span>
+                                <span class="emoji" data-emoji="♍">♍</span>
+                                <span class="emoji" data-emoji="♎">♎</span>
+                                <span class="emoji" data-emoji="♏">♏</span>
+                                <span class="emoji" data-emoji="♐">♐</span>
+                            </div>
+                            <!-- Flags -->
+                            <div class="emoji-category" id="flags">
+                                <span class="emoji" data-emoji="🏁">🏁</span>
+                                <span class="emoji" data-emoji="🚩">🚩</span>
+                                <span class="emoji" data-emoji="🎌">🎌</span>
+                                <span class="emoji" data-emoji="🏴">🏴</span>
+                                <span class="emoji" data-emoji="🏳">🏳</span>
+                                <span class="emoji" data-emoji="🏳‍🌈">🏳‍🌈</span>
+                                <span class="emoji" data-emoji="🏴‍☠">🏴‍☠</span>
+                                <span class="emoji" data-emoji="🇦🇨">🇦🇨</span>
+                                <span class="emoji" data-emoji="🇦🇩">🇦🇩</span>
+                                <span class="emoji" data-emoji="🇦🇪">🇦🇪</span>
+                                <span class="emoji" data-emoji="🇦🇫">🇦🇫</span>
+                                <span class="emoji" data-emoji="🇦🇬">🇦🇬</span>
+                                <span class="emoji" data-emoji="🇦🇮">🇦🇮</span>
+                                <span class="emoji" data-emoji="🇦🇱">🇦🇱</span>
+                                <span class="emoji" data-emoji="🇦🇲">🇦🇲</span>
+                                <span class="emoji" data-emoji="🇦🇴">🇦🇴</span>
+                                <span class="emoji" data-emoji="🇦🇶">🇦🇶</span>
+                                <span class="emoji" data-emoji="🇦🇷">🇦🇷</span>
+                                <span class="emoji" data-emoji="🇦🇸">🇦🇸</span>
+                                <span class="emoji" data-emoji="🇦🇹">🇦🇹</span>
+                                <span class="emoji" data-emoji="🇦🇺">🇦🇺</span>
+                                <span class="emoji" data-emoji="🇦🇼">🇦🇼</span>
+                                <span class="emoji" data-emoji="🇦🇽">🇦🇽</span>
+                                <span class="emoji" data-emoji="🇦🇿">🇦🇿</span>
+                                <span class="emoji" data-emoji="🇧🇦">🇧🇦</span>
+                                <span class="emoji" data-emoji="🇧🇧">🇧🇧</span>
+                                <span class="emoji" data-emoji="🇧🇩">🇧🇩</span>
+                                <span class="emoji" data-emoji="🇧🇪">🇧🇪</span>
+                                <span class="emoji" data-emoji="🇧🇫">🇧🇫</span>
+                                <span class="emoji" data-emoji="🇧🇬">🇧🇬</span>
+                                <span class="emoji" data-emoji="🇧🇭">🇧🇭</span>
+                                <span class="emoji" data-emoji="🇧🇮">🇧🇮</span>
+                                <span class="emoji" data-emoji="🇧🇯">🇧🇯</span>
+                                <span class="emoji" data-emoji="🇧🇱">🇧🇱</span>
+                                <span class="emoji" data-emoji="🇧🇲">🇧🇲</span>
+                                <span class="emoji" data-emoji="🇧🇳">🇧🇳</span>
+                                <span class="emoji" data-emoji="🇧🇴">🇧🇴</span>
+                                <span class="emoji" data-emoji="🇧🇶">🇧🇶</span>
+                                <span class="emoji" data-emoji="🇧🇷">🇧🇷</span>
+                                <span class="emoji" data-emoji="🇧🇸">🇧🇸</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <button type="submit">Отправить</button>
             </form>
@@ -169,5 +416,6 @@
     </div>
     <script src="/static/script.js"></script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'936ee94d79ffeeb1',t:'MTc0NTc2MzExMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'937e04840f3eed87',t:'MTc0NTkyMTUxMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>

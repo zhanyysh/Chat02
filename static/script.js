@@ -607,34 +607,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Удаляем повторное объявление messageInput, так как оно уже есть выше
         // const messageInput = document.getElementById('message-input');
 
-        if (emojiBtn && emojiPanel) {
-            emojiBtn.addEventListener('click', () => {
-                console.log('Нажата кнопка смайлика');
-                emojiPanel.classList.toggle('active');
-            });
-
-            // Закрываем панель при клике вне её
-            document.addEventListener('click', (e) => {
-                if (!emojiBtn.contains(e.target) && !emojiPanel.contains(e.target)) {
-                    emojiPanel.classList.remove('active');
-                }
-            });
-
-            // Обработчик для выбора emoji
-            emojiPanel.addEventListener('click', (e) => {
-                const emoji = e.target.closest('.emoji');
-                if (emoji) {
-                    const emojiChar = emoji.dataset.emoji;
-                    console.log('Выбран emoji:', emojiChar);
-                    messageInput.value += emojiChar;
-                    messageInput.focus();
-                    emojiPanel.classList.remove('active');
-                }
-            });
-        } else {
-            console.error('Кнопка смайлика или панель emoji не найдены');
-        }
         
+
+
         if (attachmentBtn && attachmentMenu) {
             attachmentBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка скрепки');
@@ -648,6 +623,107 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         } else {
             console.error('Кнопка скрепки или меню не найдены');
+        }
+
+        if (emojiBtn && emojiPanel) {
+            // Открытие/закрытие панели эмодзи при клике на кнопку
+            emojiBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Предотвращаем закрытие панели из-за клика
+                console.log('Нажата кнопка смайлика');
+                emojiPanel.classList.toggle('active');
+            });
+
+            // Закрытие панели при клике вне её или кнопки
+            document.addEventListener('click', (e) => {
+                if (!emojiBtn.contains(e.target) && !emojiPanel.contains(e.target)) {
+                    console.log('Клик вне панели эмодзи, закрываю');
+                    emojiPanel.classList.remove('active');
+                }
+            });
+
+            // Переключение категорий эмодзи
+            const emojiTabs = emojiPanel.querySelectorAll('.emoji-tab');
+            const emojiCategories = emojiPanel.querySelectorAll('.emoji-category');
+
+            emojiTabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Предотвращаем закрытие панели
+                    e.preventDefault(); // Предотвращаем возможную отправку формы
+                    // Удаляем класс active у всех вкладок и категорий
+                    emojiTabs.forEach(t => t.classList.remove('active'));
+                    emojiCategories.forEach(c => c.classList.remove('active'));
+
+                    // Добавляем класс active к текущей вкладке и категории
+                    const category = tab.getAttribute('data-category');
+                    tab.classList.add('active');
+                    document.getElementById(category).classList.add('active');
+                });
+            });
+
+            // Обработчик выбора эмодзи
+            emojiPanel.addEventListener('click', (e) => {
+                e.stopPropagation(); // Предотвращаем закрытие панели
+                e.preventDefault(); // Предотвращаем возможную отправку формы
+                const emoji = e.target.closest('.emoji');
+                if (emoji) {
+                    const emojiChar = emoji.dataset.emoji;
+                    console.log('Выбран эмодзи:', emojiChar);
+                    messageInput.value += emojiChar; // Добавляем эмодзи в поле ввода
+                    messageInput.focus(); // Сохраняем фокус на поле ввода
+                    // Панель НЕ закрывается, чтобы можно было выбрать несколько эмодзи
+                }
+            });
+        } else {
+            console.error('Кнопка смайлика или панель эмодзи не найдены');
+        }
+
+        // Обработчик отправки формы
+        if (chatForm) {
+            chatForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Форма чата отправлена');
+                if (!currentChatUserId && !currentGroupId) {
+                    showFlashMessage('Выберите чат или группу', 'warning');
+                    return;
+                }
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    showFlashMessage('WebSocket не подключен, обновите страницу', 'danger');
+                    return;
+                }
+
+                const content = messageInput.value.trim();
+                let fileDataList = [];
+
+                // Загружаем все файлы и собираем их данные
+                if (selectedFiles.length > 0) {
+                    try {
+                        for (const file of selectedFiles) {
+                            const fileData = await uploadAndSendFile(file);
+                            fileDataList.push(fileData);
+                        }
+                    } catch (error) {
+                        console.error('Ошибка при загрузке файлов:', error);
+                        return;
+                    }
+                }
+
+                // Отправляем одно сообщение с текстом и всеми файлами
+                if (content || fileDataList.length > 0) {
+                    const messageData = {
+                        content: content || null,
+                        receiver_id: currentChatUserId,
+                        group_id: currentGroupId,
+                        files: fileDataList.length > 0 ? fileDataList : null // Список файлов
+                    };
+                    console.log('Отправляю сообщение через WebSocket:', messageData);
+                    ws.send(JSON.stringify(messageData));
+                    messageInput.value = '';
+                    selectedFiles = [];
+                    updatePreview();
+                    hasInteracted = true;
+                    updateUnreadDivider();
+                }
+            });
         }
 
         if (photoVideoUpload) {
@@ -773,53 +849,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        if (chatForm) {
-            chatForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                console.log('Форма чата отправлена');
-                if (!currentChatUserId && !currentGroupId) {
-                    showFlashMessage('Выберите чат или группу', 'warning');
-                    return;
-                }
-                if (!ws || ws.readyState !== WebSocket.OPEN) {
-                    showFlashMessage('WebSocket не подключен, обновите страницу', 'danger');
-                    return;
-                }
-
-                const content = messageInput.value.trim();
-                let fileDataList = [];
-
-                // Загружаем все файлы и собираем их данные
-                if (selectedFiles.length > 0) {
-                    try {
-                        for (const file of selectedFiles) {
-                            const fileData = await uploadAndSendFile(file);
-                            fileDataList.push(fileData);
-                        }
-                    } catch (error) {
-                        console.error('Ошибка при загрузке файлов:', error);
-                        return;
-                    }
-                }
-
-                // Отправляем одно сообщение с текстом и всеми файлами
-                if (content || fileDataList.length > 0) {
-                    const messageData = {
-                        content: content || null,
-                        receiver_id: currentChatUserId,
-                        group_id: currentGroupId,
-                        files: fileDataList.length > 0 ? fileDataList : null // Список файлов
-                    };
-                    console.log('Отправляю сообщение через WebSocket:', messageData);
-                    ws.send(JSON.stringify(messageData));
-                    messageInput.value = '';
-                    selectedFiles = [];
-                    updatePreview();
-                    hasInteracted = true;
-                    updateUnreadDivider();
-                }
-            });
-        }
 
         document.addEventListener('click', (e) => {
             const mediaLink = e.target.closest('.media-link');
