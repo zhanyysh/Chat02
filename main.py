@@ -384,7 +384,7 @@ async def reset_password(
 
 @app.post("/upload-file")
 async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    print(f"Получен запрос на загрузку файла от пользователя {current_user['id']}, имя файла: {file.filename}")  # Логируем запрос
+    print(f"Получен запрос на загрузку файла от пользователя {current_user['id']}, имя файла: {file.filename}")
     allowed_image_types = ["image/jpeg", "image/png", "image/gif"]
     allowed_video_types = ["video/mp4", "video/webm"]
     allowed_file_types = ["application/pdf", "text/plain"]
@@ -404,8 +404,12 @@ async def upload_file(file: UploadFile = File(...), current_user: dict = Depends
     file_path = os.path.join(UPLOADS_DIR, filename)
 
     print(f"Сохраняю файл по пути: {file_path}")
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    try:
+        with open(file_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+    except Exception as e:
+        print(f"Ошибка сохранения файла: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
     file_url = f"/static/uploads/{filename}"
     print(f"Файл успешно сохранён, возвращаю file_url: {file_url}, file_type: {file_type}")

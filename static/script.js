@@ -604,11 +604,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Кнопка для открытия панели emoji
         const emojiBtn = document.getElementById('emoji-btn');
         const emojiPanel = document.getElementById('emoji-panel');
-        // Удаляем повторное объявление messageInput, так как оно уже есть выше
-        // const messageInput = document.getElementById('message-input');
 
-        
-
+        if (!photoVideoUpload || !fileUpload || !previewContainer || !previewImages) {
+            console.error('Один из элементов для загрузки файлов не найден:', {
+                photoVideoUpload, fileUpload, previewContainer, previewImages
+            });
+            showFlashMessage('Ошибка интерфейса: элементы для загрузки файлов не найдены', 'danger');
+            return;
+        }
+    
+        photoVideoUpload.addEventListener('change', (e) => {
+            console.log('Выбраны файлы для фото/видео:', e.target.files);
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                selectedFiles = [...selectedFiles, ...files];
+                console.log('Обновлённый selectedFiles:', selectedFiles);
+                updatePreview();
+            } else {
+                console.log('Файлы не выбраны');
+            }
+            photoVideoUpload.value = ''; // Очищаем input
+            attachmentMenu.classList.remove('active');
+        });
+    
+        fileUpload.addEventListener('change', (e) => {
+            console.log('Выбран файл:', e.target.files);
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                selectedFiles = [...selectedFiles, ...files];
+                console.log('Обновлённый selectedFiles:', selectedFiles);
+                updatePreview();
+            } else {
+                console.log('Файлы не выбраны');
+            }
+            fileUpload.value = ''; // Очищаем input
+            attachmentMenu.classList.remove('active');
+        });
 
         if (attachmentBtn && attachmentMenu) {
             attachmentBtn.addEventListener('click', () => {
@@ -681,7 +712,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (chatForm) {
             chatForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                console.log('Форма чата отправлена');
+                console.log('Форма отправлена, currentChatUserId:', currentChatUserId, 'currentGroupId:', currentGroupId);
                 if (!currentChatUserId && !currentGroupId) {
                     showFlashMessage('Выберите чат или группу', 'warning');
                     return;
@@ -690,73 +721,45 @@ document.addEventListener('DOMContentLoaded', async () => {
                     showFlashMessage('WebSocket не подключен, обновите страницу', 'danger');
                     return;
                 }
-
+            
                 const content = messageInput.value.trim();
                 let fileDataList = [];
-
-                // Загружаем все файлы и собираем их данные
+            
                 if (selectedFiles.length > 0) {
+                    console.log('Загружаю файлы:', selectedFiles);
                     try {
                         for (const file of selectedFiles) {
+                            console.log('Загружаю файл:', file.name);
                             const fileData = await uploadAndSendFile(file);
                             fileDataList.push(fileData);
+                            console.log('Файл загружен:', fileData);
                         }
                     } catch (error) {
-                        console.error('Ошибка при загрузке файлов:', error);
+                        console.error('Ошибка загрузки файлов:', error);
+                        showFlashMessage('Не удалось загрузить файлы', 'danger');
                         return;
                     }
                 }
-
-                // Отправляем одно сообщение с текстом и всеми файлами
+            
                 if (content || fileDataList.length > 0) {
                     const messageData = {
                         content: content || null,
                         receiver_id: currentChatUserId,
                         group_id: currentGroupId,
-                        files: fileDataList.length > 0 ? fileDataList : null // Список файлов
+                        files: fileDataList.length > 0 ? fileDataList : null
                     };
-                    console.log('Отправляю сообщение через WebSocket:', messageData);
+                    console.log('Отправляю сообщение:', messageData);
                     ws.send(JSON.stringify(messageData));
                     messageInput.value = '';
                     selectedFiles = [];
                     updatePreview();
                     hasInteracted = true;
                     updateUnreadDivider();
-                }
-            });
-        }
-
-        if (photoVideoUpload) {
-            photoVideoUpload.addEventListener('change', (e) => {
-                console.log('Событие change для photo-video-upload сработало');
-                const files = Array.from(e.target.files);
-                console.log('Выбранные файлы:', files);
-                if (files.length > 0) {
-                    selectedFiles = [...selectedFiles, ...files];
-                    console.log('Обновлённый массив selectedFiles:', selectedFiles);
-                    updatePreview();
                 } else {
-                    console.log('Файлы не выбраны');
+                    console.log('Сообщение пустое и нет файлов, игнорирую отправку');
+                    showFlashMessage('Введите сообщение или выберите файлы', 'warning');
                 }
-                photoVideoUpload.value = '';
-                attachmentMenu.classList.remove('active');
             });
-        } else {
-            console.error('Элемент photo-video-upload не найден');
-        }
-
-        if (fileUpload) {
-            fileUpload.addEventListener('change', async (e) => {
-                console.log('Событие change для file-upload сработало');
-                const file = e.target.files[0];
-                if (file) {
-                    await uploadAndSendFile(file);
-                }
-                fileUpload.value = '';
-                attachmentMenu.classList.remove('active');
-            });
-        } else {
-            console.error('Элемент file-upload не найден');
         }
 
         if (clearPreviewBtn) {
@@ -770,61 +773,76 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         function updatePreview() {
-            console.log('Вызвана функция updatePreview, selectedFiles:', selectedFiles);
+            console.log('Вызвана updatePreview, selectedFiles:', selectedFiles);
             previewImages.innerHTML = '';
-            if (selectedFiles.length > 0) {
-                let loadedFiles = 0;
-                selectedFiles.forEach((file, index) => {
-                    console.log(`Обрабатываю файл ${index}:`, file);
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        console.log('FileReader onload сработал для файла:', file.name);
-                        const mediaDiv = document.createElement('div');
-                        mediaDiv.className = 'preview-image';
-                        if (file.type.startsWith('image/')) {
-                            const img = document.createElement('img');
-                            img.src = e.target.result;
-                            mediaDiv.appendChild(img);
-                            console.log('Добавлено изображение:', img.src);
-                        } else if (file.type.startsWith('video/')) {
-                            const video = document.createElement('video');
-                            video.src = e.target.result;
-                            video.controls = true;
-                            mediaDiv.appendChild(video);
-                            console.log('Добавлено видео:', video.src);
-                        }
-                        const removeBtn = document.createElement('button');
-                        removeBtn.className = 'remove-preview-btn';
-                        removeBtn.textContent = '✖';
-                        removeBtn.addEventListener('click', () => {
-                            console.log(`Удаляю файл ${index}`);
-                            selectedFiles.splice(index, 1);
-                            updatePreview();
-                        });
-                        mediaDiv.appendChild(removeBtn);
-                        previewImages.appendChild(mediaDiv);
-                        console.log('Элемент добавлен в previewImages:', mediaDiv);
-                        loadedFiles++;
-                        if (loadedFiles === selectedFiles.length) {
-                            previewContainer.style.display = 'flex';
-                            console.log('Все файлы обработаны, previewContainer показан, стиль:', previewContainer.style.display);
-                        }
-                    };
-                    reader.onerror = (error) => {
-                        console.error('Ошибка чтения файла:', error);
-                    };
-                    reader.readAsDataURL(file);
-                });
-            } else {
+            if (selectedFiles.length === 0) {
                 previewContainer.style.display = 'none';
-                console.log('previewContainer скрыт');
+                console.log('selectedFiles пуст, скрываю previewContainer');
+                return;
             }
+        
+            let loadedFiles = 0;
+            selectedFiles.forEach((file, index) => {
+                console.log(`Обрабатываю файл ${index}:`, file.name, file.type);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    console.log('FileReader onload для файла:', file.name);
+                    const mediaDiv = document.createElement('div');
+                    mediaDiv.className = 'preview-image';
+        
+                    if (file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.alt = 'Preview';
+                        mediaDiv.appendChild(img);
+                        console.log('Добавлено изображение:', file.name);
+                    } else if (file.type.startsWith('video/')) {
+                        const video = document.createElement('video');
+                        video.src = e.target.result;
+                        video.controls = true;
+                        video.alt = 'Preview';
+                        mediaDiv.appendChild(video);
+                        console.log('Добавлено видео:', file.name);
+                    } else {
+                        const placeholder = document.createElement('div');
+                        placeholder.textContent = file.name;
+                        placeholder.style.padding = '10px';
+                        placeholder.style.background = '#ccc';
+                        placeholder.style.borderRadius = '4px';
+                        mediaDiv.appendChild(placeholder);
+                        console.log('Добавлен placeholder для файла:', file.name);
+                    }
+        
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-preview-btn';
+                    removeBtn.textContent = '✖';
+                    removeBtn.addEventListener('click', () => {
+                        console.log(`Удаляю файл ${index}:`, file.name);
+                        selectedFiles.splice(index, 1);
+                        updatePreview();
+                    });
+                    mediaDiv.appendChild(removeBtn);
+        
+                    previewImages.appendChild(mediaDiv);
+                    loadedFiles++;
+                    console.log(`Файл ${index} добавлен, loadedFiles: ${loadedFiles}/${selectedFiles.length}`);
+        
+                    if (loadedFiles === selectedFiles.length) {
+                        previewContainer.style.display = 'flex';
+                        console.log('Все файлы обработаны, previewContainer показан');
+                    }
+                };
+                reader.onerror = (error) => {
+                    console.error('Ошибка чтения файла:', file.name, error);
+                    showFlashMessage(`Ошибка чтения файла ${file.name}`, 'danger');
+                };
+                reader.readAsDataURL(file);
+            });
         }
 
         async function uploadAndSendFile(file) {
             const formData = new FormData();
             formData.append('file', file);
-
             try {
                 console.log('Отправляю файл на сервер:', file.name);
                 const response = await fetch('/upload-file', {
@@ -835,10 +853,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     body: formData
                 });
                 const result = await response.json();
-                console.log('Ответ от сервера:', result);
                 if (response.ok) {
+                    console.log('Файл успешно загружен:', result);
                     return { file_url: result.file_url, file_type: result.file_type };
                 } else {
+                    console.error('Ошибка сервера:', result.detail);
                     showFlashMessage(result.detail, 'danger');
                     throw new Error(result.detail);
                 }
@@ -2023,39 +2042,80 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         function updatePreview() {
+            console.log('Вызвана updatePreview, selectedFiles:', selectedFiles);
             previewImages.innerHTML = '';
-            if (selectedFiles.length > 0) {
-                selectedFiles.forEach((file, index) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const mediaDiv = document.createElement('div');
-                        mediaDiv.className = 'preview-image';
-                        if (file.type.startsWith('image/')) {
-                            const img = document.createElement('img');
-                            img.src = e.target.result;
-                            mediaDiv.appendChild(img);
-                        } else if (file.type.startsWith('video/')) {
-                            const video = document.createElement('video');
-                            video.src = e.target.result;
-                            video.controls = true;
-                            mediaDiv.appendChild(video);
-                        }
-                        const removeBtn = document.createElement('button');
-                        removeBtn.className = 'remove-preview-btn';
-                        removeBtn.textContent = '✖';
-                        removeBtn.addEventListener('click', () => {
-                            selectedFiles.splice(index, 1); // Удаляем файл из массива
-                            updatePreview(); // Обновляем просмотр
-                        });
-                        mediaDiv.appendChild(removeBtn);
-                        previewImages.appendChild(mediaDiv);
-                    };
-                    reader.readAsDataURL(file);
-                });
-                previewContainer.style.display = 'flex';
-            } else {
+            if (selectedFiles.length === 0) {
                 previewContainer.style.display = 'none';
+                console.log('selectedFiles пуст, скрываю previewContainer');
+                return;
             }
+        
+            let loadedFiles = 0;
+            selectedFiles.forEach((file, index) => {
+                console.log(`Обрабатываю файл ${index}:`, file.name, file.type);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    console.log('FileReader onload для файла:', file.name);
+                    const mediaDiv = document.createElement('div');
+                    mediaDiv.className = 'preview-image';
+        
+                    if (file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.alt = 'Preview';
+                        mediaDiv.appendChild(img);
+                        console.log('Добавлено изображение:', file.name);
+                    } else if (file.type.startsWith('video/')) {
+                        const video = document.createElement('video');
+                        video.src = e.target.result;
+                        video.controls = true;
+                        video.alt = 'Preview';
+                        mediaDiv.appendChild(video);
+                        console.log('Добавлено видео:', file.name);
+                    } else {
+                        // Для файлов (PDF, TXT и т.д.) создаём контейнер с иконкой и именем файла
+                        const filePreview = document.createElement('div');
+                        filePreview.className = 'file-preview';
+                        filePreview.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" class="file-icon">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M12 18v-6M9 15h6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span class="file-name">${file.name}</span>
+                        `;
+                        mediaDiv.appendChild(filePreview);
+                        console.log('Добавлен preview для файла:', file.name);
+                    }
+        
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-preview-btn';
+                    removeBtn.textContent = '✖';
+                    removeBtn.addEventListener('click', () => {
+                        console.log(`Удаляю файл ${index}:`, file.name);
+                        selectedFiles.splice(index, 1);
+                        updatePreview();
+                    });
+                    mediaDiv.appendChild(removeBtn);
+        
+                    previewImages.appendChild(mediaDiv);
+                    loadedFiles++;
+                    console.log(`Файл ${index} добавлен, loadedFiles: ${loadedFiles}/${selectedFiles.length}`);
+        
+                    if (loadedFiles === selectedFiles.length) {
+                        previewContainer.style.display = 'flex';
+                        console.log('Все файлы обработаны, previewContainer показан');
+                    }
+                };
+                reader.onerror = (error) => {
+                    console.error('Ошибка чтения файла:', file.name, error);
+                    showFlashMessage(`Ошибка чтения файла ${file.name}`, 'danger');
+                };
+                // Для не-медиа файлов FileReader не нужен, но мы оставим его для единообразия
+                if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+                    reader.readAsDataURL(file);
+                } else {
+                    reader.onload(); // Вызываем onload вручную для не-медиа файлов
+                }
+            });
         }
 
         // Поиск пользователей для начала чата
