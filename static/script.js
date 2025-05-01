@@ -553,7 +553,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         let hasMarkedAsRead = false;
         let hasInteracted = false;
         let lastMessageDate = null; // Для отслеживания последней даты сообщения
-        let isModalOpen = false;
 
         let selectedFiles = [];
         const chatForm = document.getElementById('chat-form');
@@ -578,17 +577,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const groupMembersList = document.getElementById('group-members-list');
         const groupMembersSearchResults = document.getElementById('group-members-search-results');
         const closeModalBtn = document.getElementById('close-modal-btn');
-        const groupInfoModal = document.getElementById('group-info-modal');
-        const groupInfoTitle = document.getElementById('group-info-title');
-        const groupDescription = document.getElementById('group-description');
-        const groupAvatarImg = document.getElementById('group-avatar-img');
-        const groupAvatarSvg = document.getElementById('group-avatar-svg');
-        const groupCreator = document.getElementById('group-creator');
-        const groupMembersCount = document.getElementById('group-members-count');
-        const groupMembers = document.getElementById('group-members');
-        const closeGroupInfoBtn = document.getElementById('close-group-info-btn');
-        const addGroupMemberInput = document.getElementById('add-group-member');
-        const addGroupMemberResults = document.getElementById('add-group-member-results');
+
         
         const photoVideoUpload = document.getElementById('photo-video-upload');
         const fileUpload = document.getElementById('file-upload');
@@ -969,161 +958,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 chatOptionsDrawer.innerHTML = '';
     
                 if (currentGroupId) {
-                    const infoBtn = document.createElement('button');
-                    infoBtn.textContent = 'Инфо о группе';
-                    infoBtn.addEventListener('click', async (e) => {
-                        console.log('Кнопка "Инфо о группе" нажата, currentGroupId:', currentGroupId);
-                        if (!currentGroupId) {
-                            console.error('currentGroupId не установлен');
-                            showFlashMessage('Выберите группу для просмотра информации', 'warning');
-                            return;
-                        }
-                        if (isModalOpen) {
-                            console.log('Модальное окно уже открыто, игнорирую повторный вызов');
-                            return;
-                        }
-                        isModalOpen = true;
-    
-                        try {
-                            console.log('Запрос информации о группе:', currentGroupId);
-                            const response = await fetch(`/groups/${currentGroupId}/info`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            const groupInfo = await response.json();
-                            console.log('Полученные данные о группе:', groupInfo);
-    
-                            if (response.ok) {
-                                groupInfoTitle.textContent = groupInfo.name || 'Группа без названия';
-                                
-                                if (!groupDescription) {
-                                    console.error('Элемент group-description не найден');
-                                    showFlashMessage('Ошибка интерфейса: не найден элемент для описания', 'danger');
-                                    return;
-                                }
-                                console.log('Описание группы:', groupInfo.description);
-                                const descriptionText = groupInfo.description && groupInfo.description.trim() !== '' 
-                                    ? groupInfo.description 
-                                    : 'Нет описания';
-                                groupDescription.textContent = descriptionText;
-                                console.log('Установлено описание:', groupDescription.textContent);
-                                
-                                if (groupInfo.avatar_url) {
-                                    groupAvatarImg.src = groupInfo.avatar_url;
-                                    groupAvatarImg.style.display = 'block';
-                                    groupAvatarSvg.style.display = 'none';
-                                } else {
-                                    groupAvatarImg.style.display = 'none';
-                                    groupAvatarSvg.style.display = 'block';
-                                }
-                                groupCreator.textContent = groupInfo.creator.username;
-                                groupCreator.dataset.userId = groupInfo.creator.id;
-                                groupCreator.className = 'value clickable';
-                                groupCreator.addEventListener('click', () => {
-                                    window.location.href = `/profile/${groupInfo.creator.id}?token=${encodeURIComponent(token)}`;
-                                });
-    
-                                groupMembersCount.textContent = groupInfo.member_count || (groupInfo.members ? groupInfo.members.length : 0);
-                                
-                                if (!groupMembers) {
-                                    console.error('Элемент group-members не найден');
-                                    showFlashMessage('Ошибка интерфейса: не найден элемент для списка участников', 'danger');
-                                    return;
-                                }
-                                groupMembers.innerHTML = '';
-                                console.log('Участники группы (до преобразования):', groupInfo.members);
-                                const membersArray = Array.isArray(groupInfo.members) ? groupInfo.members : Array.from(groupInfo.members || []);
-                                console.log('Участники группы (после преобразования):', membersArray);
-                                console.log('Длина массива участников:', membersArray.length);
-    
-                                if (membersArray.length === 0) {
-                                    console.log('Список участников пуст');
-                                    const noMembersDiv = document.createElement('div');
-                                    noMembersDiv.className = 'group-member-item';
-                                    noMembersDiv.textContent = 'Нет участников';
-                                    groupMembers.appendChild(noMembersDiv);
-                                } else {
-                                    console.log('Рендерим участников:', membersArray);
-                                    membersArray.forEach((member, index) => {
-                                        console.log(`Добавляю участника ${index}:`, member.username);
-                                        const memberDiv = document.createElement('div');
-                                        memberDiv.className = 'group-member-item';
-                                        memberDiv.dataset.userId = member.id;
-                                        memberDiv.innerHTML = `
-                                            <div class="group-member">
-                                                <div class="avatar">
-                                                    ${member.avatar_url 
-                                                        ? `<img src="${member.avatar_url}" alt="${member.username}">`
-                                                        : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <rect width="24" height="24" rx="12" fill="#1E90FF"/>
-                                                            <circle cx="12" cy="8" r="4" fill="white"/>
-                                                            <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
-                                                        </svg>`
-                                                    }
-                                                </div>
-                                                <span class="username">${member.username}</span>
-                                            </div>
-                                        `;
-                                        if (groupInfo.creator.id === currentUserId && member.id !== currentUserId) {
-                                            const removeBtn = document.createElement('button');
-                                            removeBtn.className = 'remove-btn';
-                                            removeBtn.textContent = 'Удалить';
-                                            removeBtn.addEventListener('click', async (e) => {
-                                                e.stopPropagation();
-                                                if (confirm(`Вы уверены, что хотите удалить ${member.username} из группы?`)) {
-                                                    try {
-                                                        const response = await fetch(`/groups/${currentGroupId}/remove-member`, {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/x-www-form-urlencoded',
-                                                                'Authorization': `Bearer ${token}`
-                                                            },
-                                                            body: new URLSearchParams({ user_id: member.id })
-                                                        });
-                                                        const result = await response.json();
-                                                        if (response.ok) {
-                                                            showFlashMessage('Пользователь удалён из группы', 'success');
-                                                            memberDiv.remove();
-                                                            groupMembersCount.textContent = parseInt(groupMembersCount.textContent) - 1;
-                                                        } else {
-                                                            showFlashMessage(result.detail, 'danger');
-                                                        }
-                                                    } catch (error) {
-                                                        console.error('Ошибка удаления участника:', error);
-                                                        showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
-                                                    }
-                                                }
-                                            });
-                                            memberDiv.appendChild(removeBtn);
-                                        }
-                                        memberDiv.querySelector('.group-member').addEventListener('click', () => {
-                                            window.location.href = `/profile/${member.id}?token=${encodeURIComponent(token)}`;
-                                        });
-                                        groupMembers.appendChild(memberDiv);
-                                        console.log('Элемент добавлен в DOM:', memberDiv);
-                                    });
-                                    console.log('Список участников после рендеринга:', groupMembers.innerHTML);
-                                }
-    
-                                const adminSection = document.querySelector('.admin-only');
-                                if (groupInfo.creator.id === currentUserId) {
-                                    adminSection.style.display = 'flex';
-                                } else {
-                                    adminSection.style.display = 'none';
-                                }
-    
-                                console.log('Добавляю класс active к #group-info-modal');
-                                groupInfoModal.classList.add('active');
-                                chatOptionsDrawer.classList.remove('active');
-                            } else {
-                                showFlashMessage(groupInfo.detail, 'danger');
-                            }
-                        } catch (error) {
-                            console.error('Ошибка загрузки информации о группы:', error);
-                            showFlashMessage(`Не удалось загрузить информацию о группе: ${error.message}`, 'danger');
-                        }
-                    });
-                    chatOptionsDrawer.appendChild(infoBtn);
-    
+                    
                     const clearBtn = document.createElement('button');
                     clearBtn.textContent = 'Очистить чат';
                     clearBtn.addEventListener('click', async () => {
@@ -1242,17 +1077,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
         }
-    
-        if (closeGroupInfoBtn) {
-            closeGroupInfoBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                console.log('Нажата кнопка закрытия модального окна группы');
-                groupInfoModal.classList.remove('active');
-                isModalOpen = false; // Сбрасываем флаг при закрытии
-            });
-        } else {
-            console.error('close-group-info-btn не найден');
-        }
+
 
         if (closeModalBtn) {
             closeModalBtn.addEventListener('click', () => {
@@ -1267,16 +1092,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('group-members-search-results').innerHTML = '';
                 document.getElementById('group-members-search-results').classList.remove('active');
             });
-        }
-
-        if (closeGroupInfoBtn) {
-            closeGroupInfoBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Предотвращаем всплытие события
-                console.log('Нажата кнопка закрытия модального окна группы');
-                groupInfoModal.classList.remove('active'); // Скрываем модальное окно
-            });
-        } else {
-            console.error('close-group-info-btn не найден');
         }
 
         if (createGroupForm) {
@@ -1396,124 +1211,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Поиск пользователей для добавления в существующую группу (для администратора)
-        if (addGroupMemberInput) {
-            addGroupMemberInput.addEventListener('input', async () => {
-                const query = addGroupMemberInput.value.trim();
-                if (query.length < 2) {
-                    addGroupMemberResults.classList.remove('active');
-                    addGroupMemberResults.innerHTML = '';
-                    return;
-                }
-                try {
-                    console.log('Поиск пользователей для добавления в группу:', query);
-                    const response = await fetch(`/users/search?query=${encodeURIComponent(query)}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Поиск не удался: ${response.status} (${errorText})`);
-                    }
-                    const users = await response.json();
-                    console.log('Найденные пользователи:', users);
-                    addGroupMemberResults.innerHTML = '';
-                    if (users.length === 0) {
-                        addGroupMemberResults.innerHTML = '<div class="search-result-item">Пользователи не найдены</div>';
-                    } else {
-                        users.forEach(user => {
-                            // Проверяем, не является ли пользователь уже участником группы
-                            if (groupMembers.querySelector(`[data-user-id="${user.id}"]`)) {
-                                return;
-                            }
-                            const item = document.createElement('div');
-                            item.className = 'search-result-item';
-                            item.innerHTML = `
-                                <div class="avatar">${user.username[0].toUpperCase()}</div>
-                                <div class="username">${user.username}</div>
-                            `;
-                            item.addEventListener('click', async () => {
-                                try {
-                                    const response = await fetch(`/groups/${currentGroupId}/add-member`, {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/x-www-form-urlencoded',
-                                            'Authorization': `Bearer ${token}`
-                                        },
-                                        body: new URLSearchParams({ user_id: user.id })
-                                    });
-                                    const result = await response.json();
-                                    if (response.ok) {
-                                        showFlashMessage('Пользователь добавлен в группу', 'success');
-                                        // Добавляем нового участника в список
-                                        const memberDiv = document.createElement('div');
-                                        memberDiv.className = 'group-member-item';
-                                        memberDiv.dataset.userId = user.id;
-                                        memberDiv.innerHTML = `
-                                            <div class="group-member">
-                                                <div class="avatar">
-                                                    ${user.avatar_url 
-                                                        ? `<img src="${user.avatar_url}" alt="${user.username}">`
-                                                        : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <rect width="24" height="24" rx="12" fill="#1E90FF"/>
-                                                            <circle cx="12" cy="8" r="4" fill="white"/>
-                                                            <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
-                                                        </svg>`
-                                                    }
-                                                </div>
-                                                <div class="username">${user.username}</div>
-                                            </div>
-                                            <button class="remove-btn">Удалить</button>
-                                        `;
-                                        memberDiv.querySelector('.group-member').addEventListener('click', () => {
-                                            window.location.href = `/profile/${user.id}?token=${encodeURIComponent(token)}`;
-                                        });
-                                        memberDiv.querySelector('.remove-btn').addEventListener('click', async (e) => {
-                                            e.stopPropagation();
-                                            if (confirm(`Вы уверены, что хотите удалить ${user.username} из группы?`)) {
-                                                try {
-                                                    const response = await fetch(`/groups/${currentGroupId}/remove-member`, {
-                                                        method: 'POST',
-                                                        headers: {
-                                                            'Content-Type': 'application/x-www-form-urlencoded',
-                                                            'Authorization': `Bearer ${token}`
-                                                        },
-                                                        body: new URLSearchParams({ user_id: user.id })
-                                                    });
-                                                    const result = await response.json();
-                                                    if (response.ok) {
-                                                        showFlashMessage('Пользователь удалён из группы', 'success');
-                                                        memberDiv.remove();
-                                                        groupMembersCount.textContent = parseInt(groupMembersCount.textContent) - 1;
-                                                    } else {
-                                                        showFlashMessage(result.detail, 'danger');
-                                                    }
-                                                } catch (error) {
-                                                    console.error('Ошибка удаления участника:', error);
-                                                    showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
-                                                }
-                                            }
-                                        });
-                                        groupMembers.appendChild(memberDiv);
-                                        groupMembersCount.textContent = parseInt(groupMembersCount.textContent) + 1;
-                                        addGroupMemberInput.value = '';
-                                        addGroupMemberResults.classList.remove('active');
-                                    } else {
-                                        showFlashMessage(result.detail, 'danger');
-                                    }
-                                } catch (error) {
-                                    console.error('Ошибка добавления участника:', error);
-                                    showFlashMessage(`Не удалось добавить участника: ${error.message}`, 'danger');
-                                }
-                            });
-                            addGroupMemberResults.appendChild(item);
-                        });
-                    }
-                    addGroupMemberResults.classList.add('active');
-                } catch (error) {
-                    console.error('Ошибка поиска пользователей:', error);
-                    showFlashMessage(`Ошибка поиска пользователей: ${error.message}`, 'danger');
-                }
-            });
-        }
+        
 
         // Загрузка недавних чатов
         async function loadRecentChats() {
