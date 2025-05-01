@@ -553,7 +553,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         let hasMarkedAsRead = false;
         let hasInteracted = false;
         let lastMessageDate = null; // Для отслеживания последней даты сообщения
-        
+        let isModalOpen = false;
+
         let selectedFiles = [];
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
@@ -604,6 +605,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Кнопка для открытия панели emoji
         const emojiBtn = document.getElementById('emoji-btn');
         const emojiPanel = document.getElementById('emoji-panel');
+
+        if (chatList) {
+            chatList.addEventListener('click', (e) => {
+                const chatItem = e.target.closest('.group-item');
+                if (chatItem) {
+                    const isGroup = chatItem.dataset.isGroup === 'true';
+                    currentGroupId = isGroup ? parseInt(chatItem.dataset.id) : null;
+                    currentChatUserId = isGroup ? null : parseInt(chatItem.dataset.id);
+                    console.log('Выбран чат, currentGroupId:', currentGroupId, 'currentChatUserId:', currentChatUserId);
+                }
+            });
+        }
 
         if (!photoVideoUpload || !fileUpload || !previewContainer || !previewImages) {
             console.error('Один из элементов для загрузки файлов не найден:', {
@@ -941,26 +954,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (createGroupBtn) {
             createGroupBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка создания группы');
-                menuDrawer.classList.remove('active');
-                createGroupModal.style.display = 'block';
+                createGroupModal.classList.add('active'); // Добавляем класс active для показа
             });
         }
 
         if (moreOptions && chatOptionsDrawer) {
-            moreOptions.addEventListener('click', () => {
+            moreOptions.addEventListener('click', (e) => {
+                e.stopPropagation();
                 console.log('Нажата иконка дополнительных опций чата');
                 if (!currentChatUserId && !currentGroupId) {
                     showFlashMessage('Выберите чат или группу', 'warning');
                     return;
                 }
-                // Очищаем предыдущие кнопки
                 chatOptionsDrawer.innerHTML = '';
-
+    
                 if (currentGroupId) {
-                    // Меню для группы
                     const infoBtn = document.createElement('button');
                     infoBtn.textContent = 'Инфо о группе';
-                    infoBtn.addEventListener('click', async () => {
+                    infoBtn.addEventListener('click', async (e) => {
+                        console.log('Кнопка "Инфо о группе" нажата, currentGroupId:', currentGroupId);
+                        if (!currentGroupId) {
+                            console.error('currentGroupId не установлен');
+                            showFlashMessage('Выберите группу для просмотра информации', 'warning');
+                            return;
+                        }
+                        if (isModalOpen) {
+                            console.log('Модальное окно уже открыто, игнорирую повторный вызов');
+                            return;
+                        }
+                        isModalOpen = true;
+    
                         try {
                             console.log('Запрос информации о группе:', currentGroupId);
                             const response = await fetch(`/groups/${currentGroupId}/info`, {
@@ -968,10 +991,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                             });
                             const groupInfo = await response.json();
                             console.log('Полученные данные о группе:', groupInfo);
-                    
+    
                             if (response.ok) {
-                                groupInfoTitle.textContent = groupInfo.name;
-                                groupDescription.textContent = groupInfo.description || 'Нет описания';
+                                groupInfoTitle.textContent = groupInfo.name || 'Группа без названия';
+                                
+                                if (!groupDescription) {
+                                    console.error('Элемент group-description не найден');
+                                    showFlashMessage('Ошибка интерфейса: не найден элемент для описания', 'danger');
+                                    return;
+                                }
+                                console.log('Описание группы:', groupInfo.description);
+                                const descriptionText = groupInfo.description && groupInfo.description.trim() !== '' 
+                                    ? groupInfo.description 
+                                    : 'Нет описания';
+                                groupDescription.textContent = descriptionText;
+                                console.log('Установлено описание:', groupDescription.textContent);
+                                
                                 if (groupInfo.avatar_url) {
                                     groupAvatarImg.src = groupInfo.avatar_url;
                                     groupAvatarImg.style.display = 'block';
@@ -986,19 +1021,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 groupCreator.addEventListener('click', () => {
                                     window.location.href = `/profile/${groupInfo.creator.id}?token=${encodeURIComponent(token)}`;
                                 });
-                    
-                                groupMembersCount.textContent = groupInfo.member_count || groupInfo.members.length;
+    
+                                groupMembersCount.textContent = groupInfo.member_count || (groupInfo.members ? groupInfo.members.length : 0);
+                                
+                                if (!groupMembers) {
+                                    console.error('Элемент group-members не найден');
+                                    showFlashMessage('Ошибка интерфейса: не найден элемент для списка участников', 'danger');
+                                    return;
+                                }
                                 groupMembers.innerHTML = '';
-                                if (!groupInfo.members || groupInfo.members.length === 0) {
+                                console.log('Участники группы (до преобразования):', groupInfo.members);
+                                const membersArray = Array.isArray(groupInfo.members) ? groupInfo.members : Array.from(groupInfo.members || []);
+                                console.log('Участники группы (после преобразования):', membersArray);
+                                console.log('Длина массива участников:', membersArray.length);
+    
+                                if (membersArray.length === 0) {
                                     console.log('Список участников пуст');
                                     const noMembersDiv = document.createElement('div');
                                     noMembersDiv.className = 'group-member-item';
                                     noMembersDiv.textContent = 'Нет участников';
                                     groupMembers.appendChild(noMembersDiv);
                                 } else {
-                                    console.log('Рендерим участников:', groupInfo.members);
-                                    groupInfo.members.forEach(member => {
-                                        console.log('Добавляю участника:', member.username);
+                                    console.log('Рендерим участников:', membersArray);
+                                    membersArray.forEach((member, index) => {
+                                        console.log(`Добавляю участника ${index}:`, member.username);
                                         const memberDiv = document.createElement('div');
                                         memberDiv.className = 'group-member-item';
                                         memberDiv.dataset.userId = member.id;
@@ -1057,26 +1103,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     });
                                     console.log('Список участников после рендеринга:', groupMembers.innerHTML);
                                 }
-                    
+    
                                 const adminSection = document.querySelector('.admin-only');
                                 if (groupInfo.creator.id === currentUserId) {
                                     adminSection.style.display = 'flex';
                                 } else {
                                     adminSection.style.display = 'none';
                                 }
-                    
-                                groupInfoModal.style.display = 'block';
+    
+                                console.log('Добавляю класс active к #group-info-modal');
+                                groupInfoModal.classList.add('active');
+                                chatOptionsDrawer.classList.remove('active');
                             } else {
                                 showFlashMessage(groupInfo.detail, 'danger');
                             }
                         } catch (error) {
-                            console.error('Ошибка загрузки информации о группе:', error);
+                            console.error('Ошибка загрузки информации о группы:', error);
                             showFlashMessage(`Не удалось загрузить информацию о группе: ${error.message}`, 'danger');
                         }
-                        chatOptionsDrawer.classList.remove('active');
                     });
                     chatOptionsDrawer.appendChild(infoBtn);
-
+    
                     const clearBtn = document.createElement('button');
                     clearBtn.textContent = 'Очистить чат';
                     clearBtn.addEventListener('click', async () => {
@@ -1099,7 +1146,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         chatOptionsDrawer.classList.remove('active');
                     });
                     chatOptionsDrawer.appendChild(clearBtn);
-
+    
                     const leaveBtn = document.createElement('button');
                     leaveBtn.textContent = 'Выйти из группы';
                     leaveBtn.className = 'danger';
@@ -1127,7 +1174,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                     chatOptionsDrawer.appendChild(leaveBtn);
                 } else {
-                    // Меню для личного чата
                     const infoBtn = document.createElement('button');
                     infoBtn.textContent = 'Инфо о пользователе';
                     infoBtn.addEventListener('click', () => {
@@ -1135,7 +1181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         chatOptionsDrawer.classList.remove('active');
                     });
                     chatOptionsDrawer.appendChild(infoBtn);
-
+    
                     const clearBtn = document.createElement('button');
                     clearBtn.textContent = 'Очистить чат';
                     clearBtn.addEventListener('click', async () => {
@@ -1158,7 +1204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         chatOptionsDrawer.classList.remove('active');
                     });
                     chatOptionsDrawer.appendChild(clearBtn);
-
+    
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = 'Удалить чат';
                     deleteBtn.className = 'danger';
@@ -1186,37 +1232,51 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                     chatOptionsDrawer.appendChild(deleteBtn);
                 }
-
+    
                 chatOptionsDrawer.classList.toggle('active');
             });
-
-            // Закрываем меню при клике вне его
+    
             document.addEventListener('click', (e) => {
                 if (!moreOptions.contains(e.target) && !chatOptionsDrawer.contains(e.target)) {
                     chatOptionsDrawer.classList.remove('active');
                 }
             });
         }
+    
+        if (closeGroupInfoBtn) {
+            closeGroupInfoBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                console.log('Нажата кнопка закрытия модального окна группы');
+                groupInfoModal.classList.remove('active');
+                isModalOpen = false; // Сбрасываем флаг при закрытии
+            });
+        } else {
+            console.error('close-group-info-btn не найден');
+        }
 
         if (closeModalBtn) {
             closeModalBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка закрытия модального окна');
-                createGroupModal.style.display = 'none';
-                groupNameInput.value = '';
-                groupDescriptionInput.value = '';
-                groupAvatarInput.value = '';
-                groupMembersInput.value = '';
-                groupMembersList.innerHTML = '';
-                groupMembersSearchResults.innerHTML = '';
-                groupMembersSearchResults.classList.remove('active');
+                createGroupModal.classList.remove('active'); // Убираем класс active для скрытия
+                // Очистка полей формы
+                document.getElementById('group-name').value = '';
+                document.getElementById('group-description').value = '';
+                document.getElementById('group-avatar').value = '';
+                document.getElementById('group-members').value = '';
+                document.getElementById('group-members-list').innerHTML = '';
+                document.getElementById('group-members-search-results').innerHTML = '';
+                document.getElementById('group-members-search-results').classList.remove('active');
             });
         }
 
         if (closeGroupInfoBtn) {
-            closeGroupInfoBtn.addEventListener('click', () => {
+            closeGroupInfoBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Предотвращаем всплытие события
                 console.log('Нажата кнопка закрытия модального окна группы');
-                groupInfoModal.style.display = 'none';
+                groupInfoModal.classList.remove('active'); // Скрываем модальное окно
             });
+        } else {
+            console.error('close-group-info-btn не найден');
         }
 
         if (createGroupForm) {
