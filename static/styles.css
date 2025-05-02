@@ -248,6 +248,130 @@
     transform: none;
 }
 
+/* Group Info Modal Styles */
+#group-info-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+    overflow: auto;
+}
+
+#group-info-modal.active {
+    display: flex !important;
+}
+
+#group-info-modal .modal-content {
+    background: #1e1e2f;
+    color: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+
+#group-info-modal .modal-content h2 {
+    font-size: 24px;
+    margin-bottom: 15px;
+    color: #4caf50;
+}
+
+#group-info-modal .group-info-avatar {
+    margin: 15px auto;
+    position: relative;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#group-info-modal .group-info-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#group-info-modal .group-info-avatar svg {
+    width: 80%;
+    height: 80%;
+    fill: #4caf50;
+}
+
+#group-info-modal p {
+    margin: 10px 0;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+#group-info-modal p strong {
+    color: #4caf50;
+}
+
+#group-info-modal ul {
+    list-style: none;
+    padding: 0;
+    margin: 15px 0;
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid #4caf50;
+    border-radius: 5px;
+    background: #2a2a3d;
+}
+
+#group-info-modal ul::-webkit-scrollbar {
+    width: 8px;
+}
+
+#group-info-modal ul::-webkit-scrollbar-thumb {
+    background: #4caf50;
+    border-radius: 4px;
+}
+
+#group-info-modal ul li {
+    padding: 10px;
+    border-bottom: 1px solid #444;
+    font-size: 14px;
+    color: #ddd;
+}
+
+#group-info-modal ul li:last-child {
+    border-bottom: none;
+}
+
+#group-info-modal .close-modal-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #4caf50;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background 0.3s;
+}
+
+#group-info-modal .close-modal-btn:hover {
+    background: #388e3c;
+}
+
 /* Profile Page Styles */
 .profile-container {
     background: linear-gradient(135deg, #2A3B5A 0%, #1F2A44 100%);

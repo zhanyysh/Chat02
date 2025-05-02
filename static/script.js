@@ -1008,6 +1008,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         chatOptionsDrawer.classList.remove('active');
                     });
                     chatOptionsDrawer.appendChild(leaveBtn);
+
+                    const infoBtn = document.createElement('button');
+                    infoBtn.textContent = 'Информация о группе';
+                    infoBtn.addEventListener('click', () => {
+                        showGroupInfo(currentGroupId);
+                        chatOptionsDrawer.classList.remove('active');
+                    });
+                    chatOptionsDrawer.appendChild(infoBtn);
                 } else {
                     const infoBtn = document.createElement('button');
                     infoBtn.textContent = 'Инфо о пользователе';
@@ -1949,5 +1957,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('Вызываю initWebSocket');
         initWebSocket();
         loadRecentChats();
+    }
+
+    async function showGroupInfo(groupId) {
+        try {
+            const response = await fetch(`/groups/${groupId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!response.ok) {
+                throw new Error(`Failed to fetch group info: ${response.status}`);
+            }
+            const group = await response.json();
+            document.getElementById('group-info-title').textContent = group.name;
+            document.getElementById('group-info-description').textContent = group.description || 'Описание отсутствует';
+            document.getElementById('group-info-owner').textContent = group.creator.username;
+
+            const avatarImg = document.getElementById('group-info-avatar');
+            const avatarPlaceholder = document.getElementById('group-info-avatar-placeholder');
+            if (group.avatar_url) {
+                avatarImg.src = group.avatar_url;
+                avatarImg.style.display = 'block';
+                avatarPlaceholder.style.display = 'none';
+            } else {
+                avatarImg.style.display = 'none';
+                avatarPlaceholder.style.display = 'block';
+            }
+
+            const membersList = document.getElementById('group-info-members');
+            membersList.innerHTML = '';
+            group.members.forEach(member => {
+                const li = document.createElement('li');
+                li.textContent = member.username;
+                membersList.appendChild(li);
+            });
+
+            document.getElementById('group-info-modal').style.display = 'flex';
+        } catch (error) {
+            console.error('Error fetching group info:', error);
+            showFlashMessage('Не удалось загрузить информацию о группе', 'danger');
+        }
     }
 });
