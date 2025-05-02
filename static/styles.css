@@ -249,6 +249,11 @@
 }
 
 /* Group Info Modal Styles */
+#group-info-owner {
+    display: inline;
+    color: #fff;
+}
+
 #group-info-modal {
     display: none;
     position: fixed;
@@ -372,44 +377,35 @@
     background: #388e3c;
 }
 
-.group-member-options {
-    position: fixed;
-    background: #354469;
+.member-options {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
     border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    padding: 5px;
     z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    padding: 10px;
-    width: 150px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
 }
 
-.group-member-options button {
-    background: #354469;
-    color: #fff;
-    border: none;
-    padding: 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    text-align: left;
-    font-size: 14px;
-    transition: background 0.3s ease, transform 0.3s ease;
+.member-options button {
     display: flex;
     align-items: center;
-    margin-bottom: 5px;
+    gap: 5px;
+    background: none;
+    border: none;
+    color: #fff;
+    padding: 5px 10px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
 }
 
-.group-member-options button:last-child {
-    margin-bottom: 0;
+.member-options button:hover {
+    background: #3498db;
 }
 
-.group-member-options button:hover {
-    background: #3D5B97;
-    transform: scale(1.05);
-}
-
-.group-member-options button svg {
-    margin-right: 8px;
+.group-info-add-members {
+    display: none; /* Скрываем блок по умолчанию */
+    margin-top: 20px;
 }
 
 

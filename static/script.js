@@ -1959,23 +1959,64 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadRecentChats();
     }
 
-    // В функции showGroupInfo добавляем обработчик для поиска пользователей
-    // В функции showGroupInfo добавляем обработчик для поиска пользователей
+
+    // Отображение информации о группе
     async function showGroupInfo(groupId) {
+        console.log('Показываю информацию о группе:', groupId);
+        const modal = document.getElementById('group-info-modal');
+        const title = document.getElementById('group-info-title');
+        const description = document.getElementById('group-info-description');
+        const owner = document.getElementById('group-info-owner');
+        const membersList = document.getElementById('group-info-members');
+        const avatarImg = document.getElementById('group-info-avatar');
+        const avatarPlaceholder = document.getElementById('group-info-avatar-placeholder');
+        const addMembersSection = document.querySelector('.group-info-add-members');
+        const searchInput = document.getElementById('group-info-search-input');
+        const searchResults = document.getElementById('group-info-search-results');
+
         try {
-            const response = await fetch(`/groups/${groupId}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            // Получаем информацию о группе
+            const groupResponse = await fetch(`/groups/${groupId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch group info: ${response.status}`);
+            const group = await groupResponse.json();
+            if (!groupResponse.ok) {
+                throw new Error(`Не удалось загрузить информацию о группе: ${groupResponse.status} (${group.detail})`);
             }
-            const group = await response.json();
-            document.getElementById('group-info-title').textContent = group.name;
-            document.getElementById('group-info-description').textContent = group.description || 'Описание отсутствует';
-            document.getElementById('group-info-owner').textContent = group.creator.username;
-    
-            const avatarImg = document.getElementById('group-info-avatar');
-            const avatarPlaceholder = document.getElementById('group-info-avatar-placeholder');
+            console.log('Инфо о группе:', group);
+
+            // Получаем текущего пользователя, чтобы проверить, является ли он владельцем
+            const userResponse = await fetch('/users/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const currentUser = await userResponse.json();
+            if (!userResponse.ok) {
+                throw new Error(`Не удалось загрузить данные пользователя: ${userResponse.status} (${currentUser.detail})`);
+            }
+            console.log('Текущий пользователь:', currentUser);
+
+            // Извлекаем данные о создателе из group.creator
+            const creatorId = group.creator ? group.creator.id : null;
+            const creatorUsername = group.creator ? group.creator.username : 'Неизвестно';
+            
+            console.log('ID текущего пользователя:', currentUser.id);
+            console.log('ID создателя группы:', creatorId);
+            const isOwner = Number(currentUser.id) === Number(creatorId);
+            console.log('Является ли пользователь владельцем?', isOwner);
+
+            // Показываем или скрываем секцию добавления участников
+            if (addMembersSection) {
+                console.log('Устанавливаю видимость секции добавления участников:', isOwner ? 'block' : 'none');
+                addMembersSection.style.display = isOwner ? 'block' : 'none';
+            } else {
+                console.error('Элемент .group-info-add-members не найден');
+            }
+
+            // Заполняем информацию о группе
+            title.textContent = group.name;
+            description.textContent = group.description || 'Описание отсутствует';
+            console.log('Имя владельца группы:', creatorUsername);
+            owner.textContent = creatorUsername || 'Неизвестно';
             if (group.avatar_url) {
                 avatarImg.src = group.avatar_url;
                 avatarImg.style.display = 'block';
@@ -1984,97 +2025,97 @@ document.addEventListener('DOMContentLoaded', async () => {
                 avatarImg.style.display = 'none';
                 avatarPlaceholder.style.display = 'block';
             }
-    
-            const membersList = document.getElementById('group-info-members');
+
+            // Загружаем участников группы
             membersList.innerHTML = '';
             group.members.forEach(member => {
                 const li = document.createElement('li');
+                li.className = 'group-member-item';
                 li.textContent = member.username;
-                li.dataset.userId = member.id; // Сохраняем ID пользователя
-                // Добавляем обработчик ПКМ
-                li.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    // Закрываем все открытые меню
-                    document.querySelectorAll('.group-member-options').forEach(menu => menu.remove());
-    
-                    // Не показываем меню для владельца группы
-                    if (member.id === group.creator.id) {
-                        return;
-                    }
-    
-                    const optionsMenu = document.createElement('div');
-                    optionsMenu.className = 'group-member-options';
-                    optionsMenu.innerHTML = `
-                        <button class="remove-member-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M3 6h18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-                                <path d="M8 6v14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-                                <path d="M10 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-                                <path d="M14 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-                            </svg>
-                            Удалить
-                        </button>
-                    `;
-    
-                    // Позиционируем меню
-                    const liRect = li.getBoundingClientRect();
-                    optionsMenu.style.top = `${e.clientY + window.scrollY}px`;
-                    optionsMenu.style.left = `${e.clientX + window.scrollX}px`;
-    
-                    document.body.appendChild(optionsMenu);
-    
-                    // Обработчик для кнопки удаления
-                    optionsMenu.querySelector('.remove-member-btn').addEventListener('click', async () => {
-                        try {
-                            const formData = new FormData();
-                            formData.append('user_id', member.id);
-                            const response = await fetch(`/groups/${groupId}/remove-member`, {
-                                method: 'POST',
-                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                                body: formData
-                            });
-                            if (!response.ok) {
-                                const errorText = await response.text();
-                                throw new Error(`Не удалось удалить пользователя: ${response.status} (${errorText})`);
+                li.dataset.memberId = member.id; // Сохраняем ID участника в dataset
+
+                // Добавляем контекстное меню для владельца (ПКМ)
+                if (isOwner && member.id !== currentUser.id) {
+                    li.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        // Закрываем все открытые меню
+                        document.querySelectorAll('.member-options').forEach(menu => menu.remove());
+
+                        const optionsMenu = document.createElement('div');
+                        optionsMenu.className = 'member-options';
+                        optionsMenu.innerHTML = `
+                            <button class="remove-member-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 6h18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M8 6v14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M10 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M14 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                                Удалить
+                            </button>
+                        `;
+
+                        // Позиционируем меню
+                        const liRect = li.getBoundingClientRect();
+                        optionsMenu.style.top = `${liRect.bottom + window.scrollY}px`;
+                        optionsMenu.style.left = `${liRect.left + window.scrollX}px`;
+
+                        document.body.appendChild(optionsMenu);
+
+                        // Обработчик для кнопки удаления
+                        optionsMenu.querySelector('.remove-member-btn').addEventListener('click', async () => {
+                            try {
+                                const response = await fetch(`/groups/${groupId}/remove-member`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/x-www-form-urlencoded',
+                                        'Authorization': `Bearer ${token}`
+                                    },
+                                    body: new URLSearchParams({ user_id: member.id })
+                                });
+                                const result = await response.json();
+                                if (response.ok) {
+                                    showFlashMessage('Участник удалён', 'success');
+                                    showGroupInfo(groupId); // Обновляем информацию о группе
+                                } else {
+                                    showFlashMessage(result.detail, 'danger');
+                                }
+                            } catch (error) {
+                                console.error('Ошибка удаления участника:', error);
+                                showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
                             }
-                            showFlashMessage('Пользователь удалён из группы', 'success');
-                            // Обновляем информацию о группе
-                            showGroupInfo(groupId);
-                        } catch (error) {
-                            console.error('Ошибка удаления пользователя:', error);
-                            showFlashMessage(`Ошибка: ${error.message}`, 'danger');
-                        }
-                        optionsMenu.remove();
-                    });
-    
-                    // Закрываем меню при клике вне его
-                    document.addEventListener('click', (e) => {
-                        if (!optionsMenu.contains(e.target) && !li.contains(e.target)) {
                             optionsMenu.remove();
-                        }
-                    }, { once: true });
-                });
+                        });
+
+                        // Закрываем меню при клике вне его
+                        document.addEventListener('click', function closeMenu(event) {
+                            if (!optionsMenu.contains(event.target)) {
+                                optionsMenu.remove();
+                                document.removeEventListener('click', closeMenu);
+                            }
+                        });
+                    });
+                }
+
                 membersList.appendChild(li);
             });
-    
-            document.getElementById('group-info-modal').style.display = 'flex';
-    
-            // Существующий обработчик для поиска пользователей
-            const groupInfoSearchInput = document.getElementById('group-info-search-input');
-            const groupInfoSearchResults = document.getElementById('group-info-search-results');
-            if (groupInfoSearchInput) {
-                groupInfoSearchInput.addEventListener('input', async () => {
-                    const query = groupInfoSearchInput.value.trim();
+
+            modal.style.display = 'flex';
+
+            // Поиск пользователей для добавления в группу (только для владельца)
+            if (isOwner && searchInput) {
+                searchInput.addEventListener('input', async () => {
+                    const query = searchInput.value.trim();
                     if (query.length < 2) {
-                        groupInfoSearchResults.classList.remove('active');
-                        groupInfoSearchResults.innerHTML = '';
+                        searchResults.classList.remove('active');
+                        searchResults.innerHTML = '';
                         return;
                     }
                     try {
                         console.log('Поиск пользователей для добавления в группу:', query);
                         const response = await fetch(`/users/search?query=${encodeURIComponent(query)}`, {
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                            headers: { 'Authorization': `Bearer ${token}` }
                         });
                         if (!response.ok) {
                             const errorText = await response.text();
@@ -2082,9 +2123,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                         const users = await response.json();
                         console.log('Найденные пользователи:', users);
-                        groupInfoSearchResults.innerHTML = '';
+                        searchResults.innerHTML = '';
                         if (users.length === 0) {
-                            groupInfoSearchResults.innerHTML = '<div class="search-result-item">Пользователи не найдены</div>';
+                            searchResults.innerHTML = '<div class="search-result-item">Пользователи не найдены</div>';
                         } else {
                             users.forEach(user => {
                                 if (!group.members.some(member => member.id === user.id)) {
@@ -2096,40 +2137,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     `;
                                     item.addEventListener('click', async () => {
                                         try {
-                                            const formData = new FormData();
-                                            formData.append('user_id', user.id);
                                             const response = await fetch(`/groups/${groupId}/add-member`, {
                                                 method: 'POST',
-                                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                                                body: formData
+                                                headers: {
+                                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                                    'Authorization': `Bearer ${token}`
+                                                },
+                                                body: new URLSearchParams({ user_id: user.id })
                                             });
-                                            if (!response.ok) {
-                                                const errorText = await response.text();
-                                                throw new Error(`Не удалось добавить пользователя: ${response.status} (${errorText})`);
+                                            const result = await response.json();
+                                            if (response.ok) {
+                                                showFlashMessage('Участник добавлен', 'success');
+                                                searchInput.value = '';
+                                                searchResults.classList.remove('active');
+                                                showGroupInfo(groupId); // Обновляем информацию о группе
+                                            } else {
+                                                showFlashMessage(result.detail, 'danger');
                                             }
-                                            showFlashMessage('Пользователь добавлен в группу', 'success');
-                                            groupInfoSearchInput.value = '';
-                                            groupInfoSearchResults.classList.remove('active');
-                                            showGroupInfo(groupId);
                                         } catch (error) {
-                                            console.error('Ошибка добавления пользователя:', error);
-                                            showFlashMessage(`Ошибка: ${error.message}`, 'danger');
+                                            console.error('Ошибка добавления участника:', error);
+                                            showFlashMessage(`Не удалось добавить участника: ${error.message}`, 'danger');
                                         }
                                     });
-                                    groupInfoSearchResults.appendChild(item);
+                                    searchResults.appendChild(item);
                                 }
                             });
                         }
-                        groupInfoSearchResults.classList.add('active');
+                        searchResults.classList.add('active');
                     } catch (error) {
-                        console.error('Ошибка поиска:', error);
-                        showFlashMessage(`Ошибка поиска пользователей: ${error.message}`, 'danger');
+                        console.error('Ошибка поиска пользователей:', error);
+                        showFlashMessage(`Ошибка поиска: ${error.message}`, 'danger');
                     }
                 });
             }
         } catch (error) {
-            console.error('Error fetching group info:', error);
-            showFlashMessage('Не удалось загрузить информацию о группе', 'danger');
+            console.error('Ошибка загрузки информации о группе:', error);
+            showFlashMessage(`Не удалось загрузить информацию о группе: ${error.message}`, 'danger');
         }
     }
 });
