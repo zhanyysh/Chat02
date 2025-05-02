@@ -1959,6 +1959,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadRecentChats();
     }
 
+    // В функции showGroupInfo добавляем обработчик для поиска пользователей
+    // В функции showGroupInfo добавляем обработчик для поиска пользователей
     async function showGroupInfo(groupId) {
         try {
             const response = await fetch(`/groups/${groupId}`, {
@@ -1971,7 +1973,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('group-info-title').textContent = group.name;
             document.getElementById('group-info-description').textContent = group.description || 'Описание отсутствует';
             document.getElementById('group-info-owner').textContent = group.creator.username;
-
+    
             const avatarImg = document.getElementById('group-info-avatar');
             const avatarPlaceholder = document.getElementById('group-info-avatar-placeholder');
             if (group.avatar_url) {
@@ -1982,16 +1984,149 @@ document.addEventListener('DOMContentLoaded', async () => {
                 avatarImg.style.display = 'none';
                 avatarPlaceholder.style.display = 'block';
             }
-
+    
             const membersList = document.getElementById('group-info-members');
             membersList.innerHTML = '';
             group.members.forEach(member => {
                 const li = document.createElement('li');
                 li.textContent = member.username;
+                li.dataset.userId = member.id; // Сохраняем ID пользователя
+                // Добавляем обработчик ПКМ
+                li.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    // Закрываем все открытые меню
+                    document.querySelectorAll('.group-member-options').forEach(menu => menu.remove());
+    
+                    // Не показываем меню для владельца группы
+                    if (member.id === group.creator.id) {
+                        return;
+                    }
+    
+                    const optionsMenu = document.createElement('div');
+                    optionsMenu.className = 'group-member-options';
+                    optionsMenu.innerHTML = `
+                        <button class="remove-member-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 6h18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M8 6v14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M10 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M14 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Удалить
+                        </button>
+                    `;
+    
+                    // Позиционируем меню
+                    const liRect = li.getBoundingClientRect();
+                    optionsMenu.style.top = `${e.clientY + window.scrollY}px`;
+                    optionsMenu.style.left = `${e.clientX + window.scrollX}px`;
+    
+                    document.body.appendChild(optionsMenu);
+    
+                    // Обработчик для кнопки удаления
+                    optionsMenu.querySelector('.remove-member-btn').addEventListener('click', async () => {
+                        try {
+                            const formData = new FormData();
+                            formData.append('user_id', member.id);
+                            const response = await fetch(`/groups/${groupId}/remove-member`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                                body: formData
+                            });
+                            if (!response.ok) {
+                                const errorText = await response.text();
+                                throw new Error(`Не удалось удалить пользователя: ${response.status} (${errorText})`);
+                            }
+                            showFlashMessage('Пользователь удалён из группы', 'success');
+                            // Обновляем информацию о группе
+                            showGroupInfo(groupId);
+                        } catch (error) {
+                            console.error('Ошибка удаления пользователя:', error);
+                            showFlashMessage(`Ошибка: ${error.message}`, 'danger');
+                        }
+                        optionsMenu.remove();
+                    });
+    
+                    // Закрываем меню при клике вне его
+                    document.addEventListener('click', (e) => {
+                        if (!optionsMenu.contains(e.target) && !li.contains(e.target)) {
+                            optionsMenu.remove();
+                        }
+                    }, { once: true });
+                });
                 membersList.appendChild(li);
             });
-
+    
             document.getElementById('group-info-modal').style.display = 'flex';
+    
+            // Существующий обработчик для поиска пользователей
+            const groupInfoSearchInput = document.getElementById('group-info-search-input');
+            const groupInfoSearchResults = document.getElementById('group-info-search-results');
+            if (groupInfoSearchInput) {
+                groupInfoSearchInput.addEventListener('input', async () => {
+                    const query = groupInfoSearchInput.value.trim();
+                    if (query.length < 2) {
+                        groupInfoSearchResults.classList.remove('active');
+                        groupInfoSearchResults.innerHTML = '';
+                        return;
+                    }
+                    try {
+                        console.log('Поиск пользователей для добавления в группу:', query);
+                        const response = await fetch(`/users/search?query=${encodeURIComponent(query)}`, {
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                        });
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`Поиск не удался: ${response.status} (${errorText})`);
+                        }
+                        const users = await response.json();
+                        console.log('Найденные пользователи:', users);
+                        groupInfoSearchResults.innerHTML = '';
+                        if (users.length === 0) {
+                            groupInfoSearchResults.innerHTML = '<div class="search-result-item">Пользователи не найдены</div>';
+                        } else {
+                            users.forEach(user => {
+                                if (!group.members.some(member => member.id === user.id)) {
+                                    const item = document.createElement('div');
+                                    item.className = 'search-result-item';
+                                    item.innerHTML = `
+                                        <div class="avatar">${user.username[0].toUpperCase()}</div>
+                                        <div class="username">${user.username}</div>
+                                    `;
+                                    item.addEventListener('click', async () => {
+                                        try {
+                                            const formData = new FormData();
+                                            formData.append('user_id', user.id);
+                                            const response = await fetch(`/groups/${groupId}/add-member`, {
+                                                method: 'POST',
+                                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                                                body: formData
+                                            });
+                                            if (!response.ok) {
+                                                const errorText = await response.text();
+                                                throw new Error(`Не удалось добавить пользователя: ${response.status} (${errorText})`);
+                                            }
+                                            showFlashMessage('Пользователь добавлен в группу', 'success');
+                                            groupInfoSearchInput.value = '';
+                                            groupInfoSearchResults.classList.remove('active');
+                                            showGroupInfo(groupId);
+                                        } catch (error) {
+                                            console.error('Ошибка добавления пользователя:', error);
+                                            showFlashMessage(`Ошибка: ${error.message}`, 'danger');
+                                        }
+                                    });
+                                    groupInfoSearchResults.appendChild(item);
+                                }
+                            });
+                        }
+                        groupInfoSearchResults.classList.add('active');
+                    } catch (error) {
+                        console.error('Ошибка поиска:', error);
+                        showFlashMessage(`Ошибка поиска пользователей: ${error.message}`, 'danger');
+                    }
+                });
+            }
         } catch (error) {
             console.error('Error fetching group info:', error);
             showFlashMessage('Не удалось загрузить информацию о группе', 'danger');
