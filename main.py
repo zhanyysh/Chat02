@@ -741,6 +741,46 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
     finally:
         conn.close()
 
+@app.post("/groups/{group_id}/add_user", response_model=GroupInfo)
+async def add_user_to_group(group_id: int, user_id: int, current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+
+    # Check if the current user is the group owner or admin
+    cursor.execute("SELECT creator_id FROM groups WHERE id = ?", (group_id,))
+    group = cursor.fetchone()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if group[0] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the group owner can add users")
+
+    # Add the user to the group
+    cursor.execute("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", (group_id, user_id))
+    conn.commit()
+
+    # Fetch updated group info
+    return get_group_info(group_id)
+
+@app.post("/groups/{group_id}/remove_user", response_model=GroupInfo)
+async def remove_user_from_group(group_id: int, user_id: int, current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+
+    # Check if the current user is the group owner or admin
+    cursor.execute("SELECT creator_id FROM groups WHERE id = ?", (group_id,))
+    group = cursor.fetchone()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if group[0] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the group owner can remove users")
+
+    # Remove the user from the group
+    cursor.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, user_id))
+    conn.commit()
+
+    # Fetch updated group info
+    return get_group_info(group_id)
+
 @app.get("/groups", response_model=List[Group])
 async def get_groups(current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect("chat.db")
@@ -760,6 +800,37 @@ async def get_groups(current_user: dict = Depends(get_current_user)):
     ]
     conn.close()
     return groups
+
+@app.get("/groups/{group_id}", response_model=GroupInfo)
+def get_group_info(group_id: int):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT g.id, g.name, g.description, g.avatar_url, g.creator_id, u.username AS creator_username
+        FROM groups g
+        JOIN users u ON g.creator_id = u.id
+        WHERE g.id = ?
+    """, (group_id,))
+    group = cursor.fetchone()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    cursor.execute("""
+        SELECT u.id, u.username, u.avatar_url
+        FROM group_members gm
+        JOIN users u ON gm.user_id = u.id
+        WHERE gm.group_id = ?
+    """, (group_id,))
+    members = cursor.fetchall()
+
+    return {
+        "id": group[0],
+        "name": group[1],
+        "description": group[2],
+        "avatar_url": group[3],
+        "creator": {"id": group[4], "username": group[5]},
+        "members": [{"id": m[0], "username": m[1], "avatar_url": m[2]} for m in members]
+    }
 
 @app.get("/groups/{group_id}/info", response_model=GroupInfo)
 async def get_group_info(group_id: int, current_user: dict = Depends(get_current_user)):
