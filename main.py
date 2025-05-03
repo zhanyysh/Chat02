@@ -149,6 +149,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS group_members (
             group_id INTEGER,
             user_id INTEGER,
+            is_admin INTEGER DEFAULT 0,  -- Добавляем поле для статуса администратора
             PRIMARY KEY (group_id, user_id),
             FOREIGN KEY (group_id) REFERENCES groups(id),
             FOREIGN KEY (user_id) REFERENCES users(id)
@@ -667,6 +668,7 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
+        # Проверяем, что группа существует
         cursor.execute(
             "SELECT creator_id FROM groups WHERE id = ?",
             (group_id,)
@@ -674,13 +676,22 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
         group = cursor.fetchone()
         if not group:
             raise HTTPException(status_code=404, detail="Group not found")
-        if group[0] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Only the group creator can add members")
 
+        # Проверяем, является ли пользователь владельцем или администратором
+        cursor.execute(
+            "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, current_user["id"])
+        )
+        member = cursor.fetchone()
+        if not member and current_user["id"] != group[0]:
+            raise HTTPException(status_code=403, detail="Only the group creator or admins can add members")
+
+        # Проверяем, что добавляемый пользователь существует
         cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Проверяем, что пользователь еще не в группе
         cursor.execute(
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
@@ -688,8 +699,9 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="User is already a member of this group")
 
+        # Добавляем пользователя в группу
         cursor.execute(
-            "INSERT INTO group_members (group_id, user_id) VALUES (?, ?)",
+            "INSERT INTO group_members (group_id, user_id, is_admin) VALUES (?, ?, 0)",
             (group_id, user_id)
         )
         conn.commit()
@@ -699,12 +711,13 @@ async def add_group_member(group_id: int, user_id: int = Form(...), current_user
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
-
-@app.post("/groups/{group_id}/remove-member")
-async def remove_group_member(group_id: int, user_id: int = Form(...), current_user: dict = Depends(get_current_user)):
+        
+@app.post("/groups/{group_id}/set-admin")
+async def set_group_admin(group_id: int, user_id: int = Form(...), current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
+        # Проверяем, что группа существует
         cursor.execute(
             "SELECT creator_id FROM groups WHERE id = ?",
             (group_id,)
@@ -712,23 +725,139 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
         group = cursor.fetchone()
         if not group:
             raise HTTPException(status_code=404, detail="Group not found")
-        if group[0] != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Only the group creator can remove members")
 
-        if user_id == current_user["id"]:
-            raise HTTPException(status_code=400, detail="Creator cannot remove themselves")
-
+        # Проверяем, является ли текущий пользователь владельцем или администратором
         cursor.execute(
-            "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
+            "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, current_user["id"])
+        )
+        current_member = cursor.fetchone()
+        if not current_member and current_user["id"] != group[0]:
+            raise HTTPException(status_code=403, detail="Only the group creator or admins can set admins")
+
+        # Проверяем, что пользователь является членом группы
+        cursor.execute(
+            "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
         )
-        if not cursor.fetchone():
+        target_member = cursor.fetchone()
+        if not target_member:
+            raise HTTPException(status_code=400, detail="User is not a member of this group")
+        if target_member[0]:
+            raise HTTPException(status_code=400, detail="User is already an admin")
+
+        # Назначаем пользователя администратором
+        cursor.execute(
+            "UPDATE group_members SET is_admin = 1 WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=400, detail="Failed to set user as admin")
+        conn.commit()
+        return {"message": "User set as admin successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+        
+@app.post("/groups/{group_id}/remove-admin")
+async def remove_group_admin(group_id: int, user_id: int = Form(...), current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        # Проверяем, что группа существует
+        cursor.execute(
+            "SELECT creator_id FROM groups WHERE id = ?",
+            (group_id,)
+        )
+        group = cursor.fetchone()
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+
+        # Проверяем, является ли текущий пользователь владельцем или администратором
+        cursor.execute(
+            "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, current_user["id"])
+        )
+        current_member = cursor.fetchone()
+        if not current_member and current_user["id"] != group[0]:
+            raise HTTPException(status_code=403, detail="Only the group creator or admins can remove admins")
+
+        # Проверяем, что пользователь является членом группы
+        cursor.execute(
+            "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id)
+        )
+        target_member = cursor.fetchone()
+        if not target_member:
+            raise HTTPException(status_code=400, detail="User is not a member of this group")
+        if not target_member[0]:
+            raise HTTPException(status_code=400, detail="User is not an admin")
+        if user_id == group[0]:
+            raise HTTPException(status_code=400, detail="Cannot remove admin status from the group creator")
+
+        # Снимаем статус администратора
+        cursor.execute(
+            "UPDATE group_members SET is_admin = 0 WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=400, detail="Failed to remove admin status")
+        conn.commit()
+        return {"message": "Admin status removed successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+        
+@app.post("/groups/{group_id}/remove-member")
+async def remove_group_member(group_id: int, user_id: int = Form(...), current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        # Проверяем, что группа существует
+        cursor.execute(
+            "SELECT creator_id FROM groups WHERE id = ?",
+            (group_id,)
+        )
+        group = cursor.fetchone()
+        if not group:
+            raise HTTPException(status_code=404, detail="Group not found")
+
+        # Проверяем, является ли текущий пользователь владельцем или администратором
+        cursor.execute(
+            "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, current_user["id"])
+        )
+        current_member = cursor.fetchone()
+        if not current_member and current_user["id"] != group[0]:
+            raise HTTPException(status_code=403, detail="Only the group creator or admins can remove members")
+
+        # Проверяем, что удаляемый пользователь является членом группы
+        cursor.execute(
+            "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id)
+        )
+        target_member = cursor.fetchone()
+        if not target_member:
             raise HTTPException(status_code=400, detail="User is not a member of this group")
 
+        # Запрещаем удалять владельца
+        if user_id == group[0]:
+            raise HTTPException(status_code=400, detail="Cannot remove the group creator")
+
+        # Если текущий пользователь - администратор (не владелец), он не может удалять других администраторов
+        if current_user["id"] != group[0] and target_member[0]:
+            raise HTTPException(status_code=403, detail="Admins cannot remove other admins")
+
+        # Удаляем пользователя из группы
         cursor.execute(
             "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, user_id)
         )
+        # Удаляем сообщения пользователя в группе
         cursor.execute(
             "DELETE FROM messages WHERE group_id = ? AND sender_id = ?",
             (group_id, user_id)
@@ -740,7 +869,7 @@ async def remove_group_member(group_id: int, user_id: int = Form(...), current_u
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
-
+        
 @app.post("/groups/{group_id}/add_user", response_model=GroupInfo)
 async def add_user_to_group(group_id: int, user_id: int, current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect("chat.db")
@@ -802,107 +931,62 @@ async def get_groups(current_user: dict = Depends(get_current_user)):
     return groups
 
 @app.get("/groups/{group_id}", response_model=GroupInfo)
-def get_group_info(group_id: int):
-    conn = sqlite3.connect("chat.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT g.id, g.name, g.description, g.avatar_url, g.creator_id, u.username AS creator_username
-        FROM groups g
-        JOIN users u ON g.creator_id = u.id
-        WHERE g.id = ?
-    """, (group_id,))
-    group = cursor.fetchone()
-    if not group:
-        raise HTTPException(status_code=404, detail="Group not found")
-
-    cursor.execute("""
-        SELECT u.id, u.username, u.avatar_url
-        FROM group_members gm
-        JOIN users u ON gm.user_id = u.id
-        WHERE gm.group_id = ?
-    """, (group_id,))
-    members = cursor.fetchall()
-
-    return {
-        "id": group[0],
-        "name": group[1],
-        "description": group[2],
-        "avatar_url": group[3],
-        "creator": {"id": group[4], "username": group[5]},
-        "members": [{"id": m[0], "username": m[1], "avatar_url": m[2]} for m in members]
-    }
-
-@app.get("/groups/{group_id}/info", response_model=GroupInfo)
 async def get_group_info(group_id: int, current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect("chat.db")
     cursor = conn.cursor()
     try:
+        # Проверяем, является ли пользователь членом группы
         cursor.execute(
             "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
             (group_id, current_user["id"])
         )
         membership = cursor.fetchone()
-        print(f"Проверка членства: group_id={group_id}, user_id={current_user['id']}, result={membership}")
         if not membership:
             raise HTTPException(status_code=403, detail="Not a member of this group")
 
-        cursor.execute(
-            """
-            SELECT g.id, g.name, g.description, g.avatar_url, g.creator_id
+        # Получаем данные о группе
+        cursor.execute("""
+            SELECT g.id, g.name, g.description, g.avatar_url, g.creator_id, u.username AS creator_username
             FROM groups g
+            JOIN users u ON g.creator_id = u.id
             WHERE g.id = ?
-            """,
-            (group_id,)
-        )
+        """, (group_id,))
         group = cursor.fetchone()
-        print(f"Группа: {group}")
         if not group:
             raise HTTPException(status_code=404, detail="Group not found")
 
-        cursor.execute(
-            "SELECT id, username, avatar_url FROM users WHERE id = ?",
-            (group[4],)
-        )
-        creator = cursor.fetchone()
-        print(f"Создатель: {creator}")
-        if not creator:
-            raise HTTPException(status_code=404, detail="Creator not found")
-
-        cursor.execute(
-            """
-            SELECT u.id, u.username, u.avatar_url
+        # Получаем данные об участниках, включая is_admin
+        cursor.execute("""
+            SELECT u.id, u.username, u.avatar_url, gm.is_admin
             FROM group_members gm
             JOIN users u ON gm.user_id = u.id
             WHERE gm.group_id = ?
-            """,
-            (group_id,)
-        )
+        """, (group_id,))
         members = [
-            {"id": row[0], "username": row[1], "avatar_url": row[2]}
-            for row in cursor.fetchall()
+            {"id": m[0], "username": m[1], "avatar_url": m[2], "is_admin": bool(m[3])}
+            for m in cursor.fetchall()
         ]
-        print(f"Участники группы {group_id}: {members}")
 
+        # Получаем количество участников
         cursor.execute(
             "SELECT COUNT(*) FROM group_members WHERE group_id = ?",
             (group_id,)
         )
         member_count = cursor.fetchone()[0]
-        print(f"Количество участников группы {group_id}: {member_count}")
 
-        conn.close()
         return {
             "id": group[0],
             "name": group[1],
             "description": group[2],
             "avatar_url": group[3],
-            "creator": {"id": creator[0], "username": creator[1], "avatar_url": creator[2]},
+            "creator": {"id": group[4], "username": group[5]},
             "members": members,
             "member_count": member_count
         }
     except Exception as e:
-        conn.close()
         raise HTTPException(status_code=500, detail=f"Failed to fetch group info: {str(e)}")
+    finally:
+        conn.close()
 
 @app.get("/messages/recent", response_model=List[RecentChat])
 async def get_recent_chats(current_user: dict = Depends(get_current_user)):

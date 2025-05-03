@@ -408,6 +408,39 @@
     margin-top: 20px;
 }
 
+.member-options .set-admin-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    color: #fff;
+    padding: 5px 10px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+}
+
+.member-options .set-admin-btn:hover {
+    background: #2ecc71; /* Зеленый для назначения админа */
+}
+
+.member-options .remove-admin-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    color: #fff;
+    padding: 5px 10px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+}
+
+.member-options .remove-admin-btn:hover {
+    background: #e74c3c; /* Красный для снятия статуса админа */
+}
 
 /* Profile Page Styles */
 .profile-container {
