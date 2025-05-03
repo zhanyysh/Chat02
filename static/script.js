@@ -1973,7 +1973,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const addMembersSection = document.querySelector('.group-info-add-members');
         const searchInput = document.getElementById('group-info-search-input');
         const searchResults = document.getElementById('group-info-search-results');
-
+        const token = localStorage.getItem('token');
+    
         try {
             // Получаем информацию о группе
             const groupResponse = await fetch(`/groups/${groupId}`, {
@@ -1984,8 +1985,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 throw new Error(`Не удалось загрузить информацию о группе: ${groupResponse.status} (${group.detail})`);
             }
             console.log('Инфо о группе:', group);
-
-            // Получаем текущего пользователя, чтобы проверить, является ли он владельцем
+    
+            // Получаем текущего пользователя
             const userResponse = await fetch('/users/me', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -1994,24 +1995,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 throw new Error(`Не удалось загрузить данные пользователя: ${userResponse.status} (${currentUser.detail})`);
             }
             console.log('Текущий пользователь:', currentUser);
-
-            // Извлекаем данные о создателе из group.creator
+    
+            // Извлекаем данные о создателе
             const creatorId = group.creator ? group.creator.id : null;
             const creatorUsername = group.creator ? group.creator.username : 'Неизвестно';
             
             console.log('ID текущего пользователя:', currentUser.id);
             console.log('ID создателя группы:', creatorId);
             const isOwner = Number(currentUser.id) === Number(creatorId);
+            const isAdmin = group.members.find(m => m.id === currentUser.id)?.is_admin || false;
             console.log('Является ли пользователь владельцем?', isOwner);
-
-            // Показываем или скрываем секцию добавления участников
+            console.log('Является ли пользователь администратором?', isAdmin);
+    
+            // Показываем секцию добавления участников для владельца или администратора
             if (addMembersSection) {
-                console.log('Устанавливаю видимость секции добавления участников:', isOwner ? 'block' : 'none');
-                addMembersSection.style.display = isOwner ? 'block' : 'none';
+                console.log('Устанавливаю видимость секции добавления участников:', (isOwner || isAdmin) ? 'block' : 'none');
+                addMembersSection.style.display = (isOwner || isAdmin) ? 'block' : 'none';
             } else {
                 console.error('Элемент .group-info-add-members не найден');
             }
-
+    
             // Заполняем информацию о группе
             title.textContent = group.name;
             description.textContent = group.description || 'Описание отсутствует';
@@ -2025,26 +2028,49 @@ document.addEventListener('DOMContentLoaded', async () => {
                 avatarImg.style.display = 'none';
                 avatarPlaceholder.style.display = 'block';
             }
-
+    
             // Загружаем участников группы
             membersList.innerHTML = '';
             group.members.forEach(member => {
                 const li = document.createElement('li');
                 li.className = 'group-member-item';
-                li.textContent = member.username;
-                li.dataset.memberId = member.id; // Сохраняем ID участника в dataset
-
-                // Добавляем контекстное меню для владельца (ПКМ)
-                if (isOwner && member.id !== currentUser.id) {
+                li.dataset.memberId = member.id;
+    
+                // Определяем роль участника
+                let role = 'Участник';
+                if (member.id === creatorId) {
+                    role = 'Владелец';
+                    li.classList.add('owner');
+                } else if (member.is_admin) {
+                    role = 'Администратор';
+                    li.classList.add('admin');
+                } else {
+                    li.classList.add('member');
+                }
+    
+                // Создаем HTML для отображения ника и роли
+                li.innerHTML = `
+                    <div class="member-info">
+                        <span class="member-username">${member.username}</span>
+                        <span class="member-role">${role}</span>
+                    </div>
+                `;
+    
+                // Добавляем контекстное меню для владельца или администратора
+                if ((isOwner || isAdmin) && member.id !== currentUser.id) {
                     li.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
                         // Закрываем все открытые меню
                         document.querySelectorAll('.member-options').forEach(menu => menu.remove());
-
+    
                         const optionsMenu = document.createElement('div');
                         optionsMenu.className = 'member-options';
-                        optionsMenu.innerHTML = `
-                            <button class="remove-member-btn">
+    
+                        // Кнопка "Удалить" (администраторы не могут удалять владельца или других админов)
+                        if (isOwner || (!member.is_admin && member.id !== creatorId)) {
+                            const removeBtn = document.createElement('button');
+                            removeBtn.className = 'remove-member-btn';
+                            removeBtn.innerHTML = `
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M3 6h18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
                                     <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
@@ -2053,41 +2079,82 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     <path d="M14 11v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
                                 </svg>
                                 Удалить
-                            </button>
-                        `;
-
+                            `;
+                            removeBtn.addEventListener('click', async () => {
+                                try {
+                                    const response = await fetch(`/groups/${groupId}/remove-member`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/x-www-form-urlencoded',
+                                            'Authorization': `Bearer ${token}`
+                                        },
+                                        body: new URLSearchParams({ user_id: member.id })
+                                    });
+                                    const result = await response.json();
+                                    if (response.ok) {
+                                        showFlashMessage('Участник удалён', 'success');
+                                        showGroupInfo(groupId);
+                                    } else {
+                                        showFlashMessage(result.detail, 'danger');
+                                    }
+                                } catch (error) {
+                                    console.error('Ошибка удаления участника:', error);
+                                    showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
+                                }
+                                optionsMenu.remove();
+                            });
+                            optionsMenu.appendChild(removeBtn);
+                        }
+    
+                        // Кнопка "Назначить админом" или "Снизить должность" (администраторы не могут менять статус владельца)
+                        if (member.id !== creatorId) {
+                            const adminBtn = document.createElement('button');
+                            adminBtn.className = member.is_admin ? 'remove-admin-btn' : 'set-admin-btn';
+                            adminBtn.innerHTML = member.is_admin ? `
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 2c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM7 13l10 0" fill="#fff"/>
+                                </svg>
+                                Снизить должность
+                            ` : `
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 2c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4.59-12.42L10 14.17l-2.59-2.58L6 13l4 4 8-8z" fill="#fff"/>
+                                </svg>
+                                Назначить админом
+                            `;
+                            adminBtn.addEventListener('click', async () => {
+                                try {
+                                    const endpoint = member.is_admin ? `/groups/${groupId}/remove-admin` : `/groups/${groupId}/set-admin`;
+                                    const response = await fetch(endpoint, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/x-www-form-urlencoded'
+                                        },
+                                        body: new URLSearchParams({ user_id: member.id })
+                                    });
+                                    const result = await response.json();
+                                    if (response.ok) {
+                                        showFlashMessage(member.is_admin ? 'Статус администратора снят' : 'Пользователь назначен администратором', 'success');
+                                        showGroupInfo(groupId);
+                                    } else {
+                                        showFlashMessage(result.detail, 'danger');
+                                    }
+                                } catch (error) {
+                                    console.error(`Ошибка ${member.is_admin ? 'снятия статуса администратора' : 'назначения администратора'}:`, error);
+                                    showFlashMessage(`Не удалось ${member.is_admin ? 'снять статус администратора' : 'назначить администратора'}: ${error.message}`, 'danger');
+                                }
+                                optionsMenu.remove();
+                            });
+                            optionsMenu.appendChild(adminBtn);
+                        }
+    
                         // Позиционируем меню
                         const liRect = li.getBoundingClientRect();
                         optionsMenu.style.top = `${liRect.bottom + window.scrollY}px`;
                         optionsMenu.style.left = `${liRect.left + window.scrollX}px`;
-
+    
                         document.body.appendChild(optionsMenu);
-
-                        // Обработчик для кнопки удаления
-                        optionsMenu.querySelector('.remove-member-btn').addEventListener('click', async () => {
-                            try {
-                                const response = await fetch(`/groups/${groupId}/remove-member`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/x-www-form-urlencoded',
-                                        'Authorization': `Bearer ${token}`
-                                    },
-                                    body: new URLSearchParams({ user_id: member.id })
-                                });
-                                const result = await response.json();
-                                if (response.ok) {
-                                    showFlashMessage('Участник удалён', 'success');
-                                    showGroupInfo(groupId); // Обновляем информацию о группе
-                                } else {
-                                    showFlashMessage(result.detail, 'danger');
-                                }
-                            } catch (error) {
-                                console.error('Ошибка удаления участника:', error);
-                                showFlashMessage(`Не удалось удалить участника: ${error.message}`, 'danger');
-                            }
-                            optionsMenu.remove();
-                        });
-
+    
                         // Закрываем меню при клике вне его
                         document.addEventListener('click', function closeMenu(event) {
                             if (!optionsMenu.contains(event.target)) {
@@ -2097,14 +2164,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         });
                     });
                 }
-
+    
                 membersList.appendChild(li);
             });
-
+    
             modal.style.display = 'flex';
-
-            // Поиск пользователей для добавления в группу (только для владельца)
-            if (isOwner && searchInput) {
+    
+            // Поиск пользователей для добавления в группу (для владельца или администратора)
+            if ((isOwner || isAdmin) && searchInput) {
                 searchInput.addEventListener('input', async () => {
                     const query = searchInput.value.trim();
                     if (query.length < 2) {
@@ -2150,7 +2217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                                 showFlashMessage('Участник добавлен', 'success');
                                                 searchInput.value = '';
                                                 searchResults.classList.remove('active');
-                                                showGroupInfo(groupId); // Обновляем информацию о группе
+                                                showGroupInfo(groupId);
                                             } else {
                                                 showFlashMessage(result.detail, 'danger');
                                             }
