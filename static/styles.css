@@ -249,11 +249,7 @@
 }
 
 /* Group Info Modal Styles */
-#group-info-owner {
-    display: inline;
-    color: #fff;
-}
-
+/* Group Info Modal Styles */
 #group-info-modal {
     display: none;
     position: fixed;
@@ -273,33 +269,52 @@
 }
 
 #group-info-modal .modal-content {
-    background: #1e1e2f;
+    background: linear-gradient(135deg, #2A3B5A 0%, #1F2A44 100%);
     color: #fff;
-    border-radius: 10px;
-    padding: 20px;
-    width: 90%;
-    max-width: 500px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    border-radius: 15px;
+    padding: 25px;
+    width: 100%;
+    max-width: 450px; /* Увеличиваем ширину окна */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
     text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.3s ease;
+    max-height: 90vh; /* Увеличиваем максимальную высоту */
+    overflow-y: auto;
+}
+
+#group-info-modal .modal-content:hover {
+    transform: scale(1);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
 
 #group-info-modal .modal-content h2 {
-    font-size: 24px;
+    font-size: 22px;
     margin-bottom: 15px;
-    color: #4caf50;
+    color: #fff; /* Белый цвет для заголовка */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    animation: fadeIn 1s ease-in;
+}
+
+#group-info-modal .modal-content h3 {
+    font-size: 16px;
+    margin: 15px 0 8px;
+    color: #fff; /* Белый цвет для подзаголовка */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 #group-info-modal .group-info-avatar {
-    margin: 15px auto;
+    margin: 10px auto;
     position: relative;
-    width: 100px;
-    height: 100px;
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
     overflow: hidden;
     background: #333;
     display: flex;
     justify-content: center;
     align-items: center;
+    border: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 #group-info-modal .group-info-avatar img {
@@ -309,78 +324,176 @@
 }
 
 #group-info-modal .group-info-avatar svg {
-    width: 80%;
-    height: 80%;
+    width: 90%;
+    height: 90%;
     fill: #4caf50;
 }
 
-#group-info-modal p {
-    margin: 10px 0;
-    font-size: 16px;
-    line-height: 1.5;
+#group-info-modal .group-info-text {
+    margin: 5px 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #fff; /* Белый цвет для текста */
 }
 
-#group-info-modal p strong {
-    color: #4caf50;
+#group-info-modal .group-info-text strong {
+    color: #fff; /* Белый цвет для "Владелец:" */
 }
 
-#group-info-modal ul {
+#group-info-modal #group-info-owner {
+    color: #3498db; /* Синий цвет для ника владельца */
+}
+
+#group-info-modal .group-members-list {
     list-style: none;
     padding: 0;
-    margin: 15px 0;
-    max-height: 150px;
+    margin: 10px 0;
+    max-height: 200px; /* Увеличиваем высоту списка */
     overflow-y: auto;
-    border: 1px solid #4caf50;
-    border-radius: 5px;
-    background: #2a2a3d;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
 }
 
-#group-info-modal ul::-webkit-scrollbar {
-    width: 8px;
+#group-info-modal .group-members-list::-webkit-scrollbar {
+    width: 5px;
 }
 
-#group-info-modal ul::-webkit-scrollbar-thumb {
+#group-info-modal .group-members-list::-webkit-scrollbar-thumb {
     background: #4caf50;
-    border-radius: 4px;
+    border-radius: 5px;
 }
 
-#group-info-modal ul li {
-    padding: 10px;
-    border-bottom: 1px solid #444;
-    font-size: 14px;
+#group-info-modal .group-members-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#group-info-modal .group-member-item {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 13px;
     color: #ddd;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
-#group-info-modal ul li:last-child {
+#group-info-modal .group-member-item:last-child {
     border-bottom: none;
+}
+
+#group-info-modal .group-member-item .member-info {
+    display: flex;
+    flex-direction: column;
+}
+
+#group-info-modal .group-member-item .member-username {
+    font-weight: bold;
+    color: #fff;
+    font-size: 14px;
+}
+
+#group-info-modal .group-member-item .member-role {
+    font-size: 11px;
+    color: #bdc3c7;
+}
+
+#group-info-modal .group-member-item.owner .member-role {
+    color: #f1c40f;
+}
+
+#group-info-modal .group-member-item.admin .member-role {
+    color: #2ecc71;
+}
+
+#group-info-modal .group-member-item.member .member-role {
+    color: #3498db;
 }
 
 #group-info-modal .close-modal-btn {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    background: #4caf50;
-    color: #fff;
+    top: 15px;
+    right: 15px;
+    background: rgba(255, 255, 255, 0.1);
     border: none;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    font-size: 18px;
+    color: #fff;
+    font-size: 16px;
     cursor: pointer;
+    padding: 8px;
+    width: 32px;
+    height: 32px;
     display: flex;
-    justify-content: center;
     align-items: center;
-    transition: background 0.3s;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.3s ease, transform 0.3s ease;
+    z-index: 10;
 }
 
 #group-info-modal .close-modal-btn:hover {
-    background: #388e3c;
+    background: #e74c3c;
+    transform: scale(1.1);
+}
+
+#group-info-modal .search-container {
+    position: relative;
+    margin: 10px 0;
+}
+
+#group-info-modal .search-input {
+    width: 100%;
+    padding: 8px 8px 8px 35px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 13px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+#group-info-modal .search-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 6px rgba(52, 152, 219, 0.5);
+    transform: scale(1.01);
+}
+
+#group-info-modal .search-input::placeholder {
+    color: #95a5a6;
+}
+
+#group-info-modal .search-icon {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    stroke: #3498db;
+}
+
+#group-info-modal .search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 150px;
+    overflow-y: auto;
+    background: #354469;
+    border-radius: 6px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+    display: none;
+}
+
+#group-info-modal .search-results.active {
+    display: block;
 }
 
 .member-options {
     position: absolute;
     background: rgba(0, 0, 0, 0.8);
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 5px;
     z-index: 1000;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
@@ -397,15 +510,11 @@
     cursor: pointer;
     width: 100%;
     text-align: left;
+    font-size: 13px;
 }
 
 .member-options button:hover {
     background: #3498db;
-}
-
-.group-info-add-members {
-    display: none; /* Скрываем блок по умолчанию */
-    margin-top: 20px;
 }
 
 .member-options .set-admin-btn {
@@ -422,7 +531,7 @@
 }
 
 .member-options .set-admin-btn:hover {
-    background: #2ecc71; /* Зеленый для назначения админа */
+    background: #2ecc71;
 }
 
 .member-options .remove-admin-btn {
@@ -439,7 +548,7 @@
 }
 
 .member-options .remove-admin-btn:hover {
-    background: #e74c3c; /* Красный для снятия статуса админа */
+    background: #e74c3c;
 }
 
 /* Profile Page Styles */
