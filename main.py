@@ -16,6 +16,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
+from contextlib import contextmanager
 
 # Load environment variables from .env file
 load_dotenv()
@@ -104,6 +105,14 @@ class GroupInfo(BaseModel):
     avatar_url: str | None = None
     creator: dict
     members: List[dict]
+    
+@contextmanager
+def get_db():
+    conn = sqlite3.connect("chat.db")
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def init_db():
     conn = sqlite3.connect("chat.db")
@@ -987,6 +996,64 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
         raise HTTPException(status_code=500, detail=f"Failed to fetch group info: {str(e)}")
     finally:
         conn.close()
+
+@app.put("/groups/{group_id}")
+async def update_group(
+    group_id: int,
+    name: str = Form(...),
+    description: str = Form(None),
+    avatar: UploadFile = File(None),
+    current_user: dict = Depends(get_current_user)
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        try:
+            # Проверяем, что группа существует
+            cursor.execute("SELECT creator_id FROM groups WHERE id = ?", (group_id,))
+            group = cursor.fetchone()
+            if not group:
+                raise HTTPException(status_code=404, detail="Group not found")
+
+            # Проверяем, является ли пользователь владельцем или администратором
+            cursor.execute(
+                "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?",
+                (group_id, current_user["id"])
+            )
+            member = cursor.fetchone()
+            if not member and current_user["id"] != group[0]:
+                raise HTTPException(status_code=403, detail="Only the group creator or admins can edit the group")
+
+            # Валидация имени группы
+            if not name or len(name) < 3:
+                raise HTTPException(status_code=400, detail="Group name must be at least 3 characters long")
+
+            # Обработка аватара
+            avatar_url = None
+            if avatar:
+                if avatar.content_type not in ["image/jpeg", "image/png"]:
+                    raise HTTPException(status_code=400, detail="Only JPEG or PNG images are allowed")
+                filename = f"group_{datetime.now().strftime('%Y%m%d%H%M%S')}_{avatar.filename}"
+                file_path = os.path.join(AVATARS_DIR, filename)
+                with open(file_path, "wb") as f:
+                    shutil.copyfileobj(avatar.file, f)
+                avatar_url = f"/static/avatars/{filename}"
+
+            # Обновляем группу
+            if avatar_url:
+                cursor.execute(
+                    "UPDATE groups SET name = ?, description = ?, avatar_url = ? WHERE id = ?",
+                    (name, description, avatar_url, group_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE groups SET name = ?, description = ? WHERE id = ?",
+                    (name, description, group_id)
+                )
+            conn.commit()
+            return {"message": "Group updated successfully"}
+        except Exception as e:
+            conn.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/messages/recent", response_model=List[RecentChat])
 async def get_recent_chats(current_user: dict = Depends(get_current_user)):

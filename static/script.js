@@ -2006,6 +2006,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isAdmin = group.members.find(m => m.id === currentUser.id)?.is_admin || false;
             console.log('Является ли пользователь владельцем?', isOwner);
             console.log('Является ли пользователь администратором?', isAdmin);
+
+            const editGroupBtn = document.getElementById('edit-group-btn');
+            if (editGroupBtn) {
+                console.log('Устанавливаю видимость кнопки редактирования:', (isOwner || isAdmin) ? 'block' : 'none');
+                editGroupBtn.style.display = (isOwner || isAdmin) ? 'block' : 'none';
+                editGroupBtn.addEventListener('click', () => {
+                    modal.style.display = 'none';
+                    showEditGroupModal(groupId);
+                });
+            } else {
+                console.error('Кнопка edit-group-btn не найдена');
+            }
     
             // Показываем секцию добавления участников для владельца или администратора
             if (addMembersSection) {
@@ -2240,6 +2252,91 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error('Ошибка загрузки информации о группе:', error);
             showFlashMessage(`Не удалось загрузить информацию о группе: ${error.message}`, 'danger');
+        }
+    }
+    async function showEditGroupModal(groupId) {
+        console.log('Показываю модальное окно редактирования группы:', groupId);
+        const modal = document.getElementById('edit-group-modal');
+        const form = document.getElementById('edit-group-form');
+        const nameInput = document.getElementById('edit-group-name');
+        const descriptionInput = document.getElementById('edit-group-description');
+        const avatarInput = document.getElementById('edit-group-avatar');
+        const closeBtn = document.getElementById('close-edit-modal-btn');
+        const token = localStorage.getItem('token');
+    
+        try {
+            // Загружаем текущие данные группы
+            const response = await fetch(`/groups/${groupId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const group = await response.json();
+            if (!response.ok) {
+                throw new Error(`Не удалось загрузить данные группы: ${response.status} (${group.detail})`);
+            }
+            console.log('Данные группы:', group);
+    
+            // Заполняем форму текущими данными
+            nameInput.value = group.name;
+            descriptionInput.value = group.description || '';
+    
+            // Показываем модальное окно
+            modal.classList.add('active');
+    
+            // Обработчик отправки формы
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Форма редактирования группы отправлена');
+                const name = nameInput.value.trim();
+                const description = descriptionInput.value.trim();
+                const avatar = avatarInput.files[0];
+    
+                if (!name || name.length < 3) {
+                    showFlashMessage('Название группы должно содержать минимум 3 символа', 'danger');
+                    return;
+                }
+    
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('description', description);
+                if (avatar) {
+                    formData.append('avatar', avatar);
+                }
+    
+                try {
+                    const response = await fetch(`/groups/${groupId}`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (response.ok) {
+                        showFlashMessage('Группа успешно обновлена', 'success');
+                        modal.classList.remove('active');
+                        // Обновляем информацию о группе
+                        showGroupInfo(groupId);
+                        // Обновляем название группы в чате
+                        document.getElementById('chat-title').textContent = name;
+                    } else {
+                        showFlashMessage(result.detail, 'danger');
+                    }
+                } catch (error) {
+                    console.error('Ошибка обновления группы:', error);
+                    showFlashMessage(`Не удалось обновить группу: ${error.message}`, 'danger');
+                }
+            }, { once: true });
+    
+            // Обработчик закрытия модального окна
+            closeBtn.addEventListener('click', () => {
+                console.log('Нажата кнопка закрытия модального окна редактирования');
+                modal.classList.remove('active');
+                // Очистка полей формы
+                nameInput.value = '';
+                descriptionInput.value = '';
+                avatarInput.value = '';
+            }, { once: true });
+        } catch (error) {
+            console.error('Ошибка загрузки данных группы:', error);
+            showFlashMessage(`Не удалось открыть редактирование группы: ${error.message}`, 'danger');
         }
     }
 });
