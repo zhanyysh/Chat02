@@ -26,6 +26,104 @@ function formatDateToRussian(date) {
     return `${day} ${month}`;
 }
 
+// === Move these functions to global scope ===
+async function loadRecentChats() {
+    const token = localStorage.getItem('token');
+    const chatList = document.getElementById('chat-list');
+    console.log('Загружаю недавние чаты');
+    try {
+        const response = await fetch('/messages/recent', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Не удалось загрузить недавние чаты: ${response.status} (${errorText})`);
+        }
+        const recentChats = await response.json();
+        console.log('Недавние чаты:', recentChats);
+        chatList.innerHTML = '';
+        if (recentChats.length === 0) {
+            chatList.innerHTML = '<div class="group-item">Нет недавних чатов</div>';
+        } else {
+            recentChats.forEach(chat => {
+                addChatToList(chat.user_id, chat.group_id, chat.username, chat.avatar_url, chat.unread_count, chat.is_group);
+            });
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки недавних чатов:', error);
+        showFlashMessage(`Не удалось загрузить недавние чаты: ${error.message}`, 'danger');
+    }
+}
+
+async function addChatToList(userId, groupId, username, avatarUrl, unreadCount, isGroup) {
+    const id = isGroup ? groupId : userId;
+    const chatList = document.getElementById('chat-list');
+    const existingChat = document.querySelector(`.group-item[data-id="${id}"][data-is-group="${isGroup}"]`);
+    if (!existingChat) {
+        const chatItem = document.createElement('div');
+        chatItem.className = 'group-item';
+        chatItem.dataset.id = id;
+        chatItem.dataset.isGroup = isGroup;
+        // Добавляем аватарку
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'group-avatar';
+        if (avatarUrl) {
+            const avatarImg = document.createElement('img');
+            avatarImg.src = avatarUrl;
+            avatarImg.alt = username;
+            avatarDiv.appendChild(avatarImg);
+        } else {
+            avatarDiv.innerHTML = `
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="24" height="24" rx="12" fill="#1E90FF"/>
+                    <circle cx="12" cy="8" r="4" fill="white"/>
+                    <path d="M12 14c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5z" fill="white"/>
+                </svg>
+            `;
+        }
+        chatItem.appendChild(avatarDiv);
+        // Добавляем информацию о чате
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'group-info';
+        infoDiv.innerHTML = `
+            <span class="group-name">${username}</span>
+            ${unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : ''}
+        `;
+        chatItem.appendChild(infoDiv);
+        chatItem.addEventListener('click', async () => {
+            // These variables are only in initChat, so you may need to update this if you want to use them globally
+            // For now, just reload messages
+            document.getElementById('chat-title').textContent = username;
+            loadMessages(userId, groupId);
+            document.querySelectorAll('.group-item').forEach(item => item.classList.remove('active'));
+            chatItem.classList.add('active');
+            updateUnreadCount(id, isGroup, 0);
+        });
+        chatList.appendChild(chatItem);
+    } else {
+        updateUnreadCount(id, isGroup, unreadCount);
+    }
+}
+
+function updateUnreadCount(id, isGroup, unreadCount) {
+    const chatItem = document.querySelector(`.group-item[data-id="${id}"][data-is-group="${isGroup}"]`);
+    if (chatItem) {
+        const existingCounter = chatItem.querySelector('.unread-count');
+        if (unreadCount > 0) {
+            if (existingCounter) {
+                existingCounter.textContent = unreadCount;
+            } else {
+                const counter = document.createElement('span');
+                counter.className = 'unread-count';
+                counter.textContent = unreadCount;
+                chatItem.querySelector('.group-info').appendChild(counter);
+            }
+        } else if (existingCounter) {
+            existingCounter.remove();
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Событие DOMContentLoaded сработало');
     const token = localStorage.getItem('token');
@@ -351,7 +449,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка закрытия профиля');
-                window.location.href = '/chat?token=' + encodeURIComponent(token);
+                window.history.back();
             });
         }
 
@@ -413,7 +511,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка закрытия профиля');
-                window.location.href = '/chat?token=' + encodeURIComponent(token);
+                window.history.back();
             });
         }
     }
@@ -514,7 +612,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (response.ok) {
                         showFlashMessage('Профиль успешно обновлен', 'success');
                         setTimeout(() => {
-                            window.location.href = '/my-profile?token=' + encodeURIComponent(token);
+                            window.history.back();
                         }, 2000);
                     } else {
                         console.error('Ошибка обновления:', result.detail);
@@ -532,13 +630,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (backBtn) {
             backBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка возврата к профилю');
-                window.location.href = '/my-profile?token=' + encodeURIComponent(token);
+                window.history.back();
             });
         }
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
                 console.log('Нажата кнопка закрытия редактирования профиля');
-                window.location.href = '/my-profile?token=' + encodeURIComponent(token);
+                window.history.back();
             });
         }
     }
@@ -2316,6 +2414,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                         showGroupInfo(groupId);
                         // Обновляем название группы в чате
                         document.getElementById('chat-title').textContent = name;
+                        // Обновляем список чатов
+                        await loadRecentChats();
+                        // Обновляем информацию в списке чатов
+                        const chatItem = document.querySelector(`.group-item[data-id="${groupId}"][data-is-group="true"]`);
+                        if (chatItem) {
+                            const groupNameSpan = chatItem.querySelector('.group-name');
+                            if (groupNameSpan) {
+                                groupNameSpan.textContent = name;
+                            }
+                            // Обновляем аватар, если он был изменен
+                            if (formData.get('group-avatar')) {
+                                const avatarDiv = chatItem.querySelector('.group-avatar');
+                                if (avatarDiv) {
+                                    const avatarImg = avatarDiv.querySelector('img');
+                                    if (avatarImg) {
+                                        avatarImg.src = URL.createObjectURL(formData.get('group-avatar'));
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         showFlashMessage(result.detail, 'danger');
                     }
@@ -2338,5 +2456,45 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Ошибка загрузки данных группы:', error);
             showFlashMessage(`Не удалось открыть редактирование группы: ${error.message}`, 'danger');
         }
+    }
+
+    const settingsBtn = document.getElementById('settings-btn');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            window.location.href = '/settings?token=' + encodeURIComponent(localStorage.getItem('token'));
+        });
+    }
+
+    // Load user info
+    fetch('/users/me', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    })
+    .then(r => r.json())
+    .then(user => {
+        document.getElementById('settings-username').textContent = user.username || '';
+        document.getElementById('settings-phone').textContent = user.mobile || '';
+        document.getElementById('settings-handle').textContent = '@' + (user.username || '');
+        if (user.avatar_url) {
+            document.getElementById('settings-avatar').src = user.avatar_url;
+        }
+    });
+
+    document.getElementById('my-account-btn').onclick = function() {
+        window.location.href = '/my-profile?token=' + encodeURIComponent(token);
+    };
+    document.getElementById('change-password-btn').onclick = function() {
+        window.location.href = '/change-password?token=' + encodeURIComponent(token);
+    };
+    document.getElementById('logout-btn').onclick = function() {
+        localStorage.removeItem('token');
+        window.location.href = '/';
+    };
+    document.getElementById('close-friends-btn').onclick = function() {
+        // If you have a close friends page, use this:
+        // window.location.href = '/close-friends?token=' + encodeURIComponent(token);
+        alert('Close Friends page coming soon!');
+    };
+    document.querySelector('.close-btn').onclick = function() {
+        window.location.href = '/chat?token=' + encodeURIComponent(localStorage.getItem('token'));
     }
 });

@@ -1484,6 +1484,12 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     finally:
         manager.disconnect(user_id)
         
+@app.get("/settings", response_class=HTMLResponse)
+async def get_settings(request: Request):
+    with open("settings.html", "r", encoding="utf-8") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
