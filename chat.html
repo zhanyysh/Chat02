@@ -16,6 +16,7 @@
                     <div class="menu-drawer">
                         <button class="menu-item" id="profile-btn">Мой профиль</button>
                         <button class="menu-item" id="create-group-btn">Создать группу</button>
+                        <button class="menu-item" id="settings-btn">Настройки</button>
                         <button class="menu-item logout-btn" id="logout-btn">Выйти</button>
                     </div>
                 </div>
@@ -382,6 +383,12 @@
         <div class="modal-content">
             <button id="close-group-info-modal-btn" class="close-modal-btn">×</button>
             <h2 id="group-info-title">Информация о группе</h2>
+            <button id="edit-group-btn" class="icon-btn" style="display: none;" aria-label="Редактировать группу">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 20h9" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
             <div class="group-info-avatar">
                 <img id="group-info-avatar" src="" alt="Group Avatar" style="display: none;">
                 <svg id="group-info-avatar-placeholder" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -405,6 +412,30 @@
             </div>
             <h3>Участники</h3>
             <ul id="group-info-members" class="group-members-list"></ul>
+        </div>
+    </div>
+    <div id="edit-group-modal" class="modal">
+        <div class="modal-content">
+            <button id="close-edit-modal-btn" class="close-modal-btn">×</button>
+            <h2>Редактировать группу</h2>
+            <form id="edit-group-form">
+                <div class="form-group">
+                    <input type="text" id="edit-group-name" name="group-name" placeholder="Название группы" required>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="edit-group-description" name="group-description" placeholder="Описание группы">
+                </div>
+                <div class="form-group">
+                    <label for="edit-group-avatar" class="custom-file-upload">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" class="upload-icon">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Выберите аватар группы
+                    </label>
+                    <input type="file" id="edit-group-avatar" name="group-avatar" accept="image/*" style="display: none;">
+                </div>
+                <button type="submit" class="confirm-btn">Сохранить</button>
+            </form>
         </div>
     </div>
     <script>
