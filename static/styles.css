@@ -2468,3 +2468,15 @@ body.settings-bg {
     color: #e74c3c;
     transform: scale(1.2) rotate(15deg);
 }
+
+/* Admin panel message alignment */
+.chat-message.left-message {
+    flex-direction: row;
+    justify-content: flex-start;
+    margin-right: auto;
+}
+.chat-message.right-message {
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    margin-left: auto;
+}
