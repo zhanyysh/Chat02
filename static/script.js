@@ -260,18 +260,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log('Результат входа:', result);
                 if (response.ok) {
                     localStorage.setItem('token', result.access_token);
-                    console.log('Токен сохранен:', localStorage.getItem('token'));
-                    console.log('Запрос к /chat после входа');
-                    const chatResponse = await fetch('/chat', {
+                    // Fetch user info to check if admin
+                    const userInfo = await fetch('/users/me', {
                         headers: { 'Authorization': `Bearer ${result.access_token}` }
                     });
-                    console.log('Получен ответ от /chat:', chatResponse.status);
-                    if (chatResponse.ok) {
-                        console.log('Доступ к /chat получен, перенаправляю');
-                        window.location.href = '/chat?token=' + encodeURIComponent(result.access_token);
+                    const user = await userInfo.json();
+                    if (user.is_admin) {
+                        window.location.href = '/admin?token=' + encodeURIComponent(result.access_token);
                     } else {
-                        console.error('Не удалось получить доступ к /chat:', chatResponse.status, await chatResponse.text());
-                        showFlashMessage('Не удалось войти в чат, попробуйте снова', 'danger');
+                        window.location.href = '/chat?token=' + encodeURIComponent(result.access_token);
                     }
                 } else {
                     console.error('Ошибка входа:', result.detail);

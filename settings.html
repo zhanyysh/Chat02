@@ -19,6 +19,14 @@
             <button class="logout-btn" id="logout-btn"><span>⎋</span> Log out</button>
         </div>
     </div>
+    <div id="close-friends-modal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:350px;">
+            <h2>Close Friends</h2>
+            <input id="close-friends-search" type="text" placeholder="Search" style="width:100%;margin-bottom:10px;">
+            <div id="close-friends-list"></div>
+            <button id="close-friends-ready" style="margin-top:15px;width:100%;">Ready</button>
+        </div>
+    </div>
     <script>
         // Load user info
         const token = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('token');
