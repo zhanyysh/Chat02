@@ -1,6 +1,6 @@
 import sqlite3
 import uuid
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, status, Request, File, UploadFile, Form, Query
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, status, Request, File, UploadFile, Form, Query, Body
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -101,6 +101,7 @@ class Message(BaseModel):
     avatar_url: str | None = None
     is_read: bool = False
     files: List[Dict[str, str]] | None = None
+    is_close_friend: bool = False  # New field to indicate if sender is a close friend
 
 class RecentChat(BaseModel):
     user_id: int | None = None
@@ -131,6 +132,9 @@ class GroupInfo(BaseModel):
     creator: dict
     members: List[dict]
     
+class FriendIdRequest(BaseModel):
+    friend_id: int
+
 @contextmanager
 def get_db():
     conn = sqlite3.connect("chat.db")
@@ -196,6 +200,15 @@ def init_db():
             user_id INTEGER,
             expires_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS close_friends (
+            user_id INTEGER,
+            friend_id INTEGER,
+            PRIMARY KEY (user_id, friend_id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (friend_id) REFERENCES users(id)
         )
     """)
     conn.commit()
@@ -1142,69 +1155,75 @@ async def get_recent_chats(current_user: dict = Depends(get_current_user)):
 
 @app.get("/messages/{receiver_id}", response_model=List[Message])
 async def get_messages(receiver_id: int, current_user: dict = Depends(get_current_user)):
-    conn = sqlite3.connect("chat.db")
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            """
-            SELECT m.id, m.content, m.timestamp, m.sender_id, m.receiver_id, u.username, u.avatar_url, m.is_read, m.files
+    with get_db() as db:
+        # Get close friends list
+        close_friends = db.execute("""
+            SELECT friend_id FROM close_friends WHERE user_id = ?
+        """, (current_user['id'],)).fetchall()
+        close_friend_ids = {row[0] for row in close_friends}
+        
+        # Get messages
+        messages = db.execute("""
+            SELECT m.id, m.content, m.timestamp, m.sender_id, m.receiver_id, m.group_id, 
+                   u.username, u.avatar_url, m.is_read,
+                   GROUP_CONCAT(json_object('file_url', f.file_url, 'file_type', f.file_type)) as files
             FROM messages m
-            JOIN users u ON m.sender_id = u.id
+            LEFT JOIN users u ON m.sender_id = u.id
+            LEFT JOIN files f ON m.id = f.message_id
             WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
-            ORDER BY m.timestamp
-            """,
-            (current_user["id"], receiver_id, receiver_id, current_user["id"])
-        )
-        messages = [
-            {
-                "id": row[0],  # Добавляем id
-                "content": row[1],
-                "timestamp": row[2],
-                "sender_id": row[3],
-                "receiver_id": row[4],
-                "username": row[5],
-                "avatar_url": row[6],
-                "is_read": bool(row[7]),
-                "files": json.loads(row[8]) if row[8] else None
-            }
-            for row in cursor.fetchall()]
-        conn.close()
-        return messages
-    except Exception as e:
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Failed to fetch messages: {str(e)}")
+            GROUP BY m.id
+            ORDER BY m.timestamp ASC
+        """, (current_user['id'], receiver_id, receiver_id, current_user['id'])).fetchall()
+        
+        return [{
+            'id': m[0],
+            'content': m[1],
+            'timestamp': m[2],
+            'sender_id': m[3],
+            'receiver_id': m[4],
+            'group_id': m[5],
+            'username': m[6],
+            'avatar_url': m[7],
+            'is_read': bool(m[8]),
+            'files': json.loads(f'[{m[9]}]') if m[9] else None,
+            'is_close_friend': m[3] in close_friend_ids
+        } for m in messages]
 
 @app.get("/messages/group/{group_id}", response_model=List[Message])
 async def get_group_messages(group_id: int, current_user: dict = Depends(get_current_user)):
-    conn = sqlite3.connect("chat.db")
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            SELECT m.id, m.content, m.timestamp, m.sender_id, m.receiver_id,
-                   m.group_id, u.username, u.avatar_url, m.is_read, m.files
+    with get_db() as db:
+        # Get close friends list
+        close_friends = db.execute("""
+            SELECT friend_id FROM close_friends WHERE user_id = ?
+        """, (current_user['id'],)).fetchall()
+        close_friend_ids = {row[0] for row in close_friends}
+        
+        # Get messages
+        messages = db.execute("""
+            SELECT m.id, m.content, m.timestamp, m.sender_id, m.receiver_id, m.group_id, 
+                   u.username, u.avatar_url, m.is_read,
+                   GROUP_CONCAT(json_object('file_url', f.file_url, 'file_type', f.file_type)) as files
             FROM messages m
-            JOIN users u ON m.sender_id = u.id
+            LEFT JOIN users u ON m.sender_id = u.id
+            LEFT JOIN files f ON m.id = f.message_id
             WHERE m.group_id = ?
+            GROUP BY m.id
             ORDER BY m.timestamp ASC
-        """, (group_id,))
-        messages = []
-        for row in cursor.fetchall():
-            messages.append({
-                "id": row[0],
-                "content": row[1],
-                "timestamp": row[2],
-                "sender_id": row[3],
-                "receiver_id": row[4],
-                "group_id": row[5],
-                "username": row[6],
-                "avatar_url": row[7],
-                "is_read": bool(row[8]),
-                "files": json.loads(row[9]) if row[9] else []
-            })
-        return messages
-    except Exception as e:
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Failed to fetch group messages: {str(e)}")
+        """, (group_id,)).fetchall()
+        
+        return [{
+            'id': m[0],
+            'content': m[1],
+            'timestamp': m[2],
+            'sender_id': m[3],
+            'receiver_id': m[4],
+            'group_id': m[5],
+            'username': m[6],
+            'avatar_url': m[7],
+            'is_read': bool(m[8]),
+            'files': json.loads(f'[{m[9]}]') if m[9] else None,
+            'is_close_friend': m[3] in close_friend_ids
+        } for m in messages]
     
 @app.put("/messages/{message_id}/edit")
 async def edit_message(
@@ -1727,6 +1746,46 @@ async def translate(request: Request):
         print(response.text)  # Print the error for debugging
         raise HTTPException(status_code=500, detail='Translation API error')
     return response.json()
+
+@app.get("/close-friends")
+async def get_close_friends(current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT u.id, u.username, u.avatar_url
+        FROM close_friends cf
+        JOIN users u ON cf.friend_id = u.id
+        WHERE cf.user_id = ?
+    """, (current_user["id"],))
+    friends = [{"id": row[0], "username": row[1], "avatar_url": row[2]} for row in cursor.fetchall()]
+    conn.close()
+    return friends
+
+@app.post("/close-friends/add")
+async def add_close_friend(data: FriendIdRequest, current_user: dict = Depends(get_current_user)):
+    friend_id = data.friend_id
+    if friend_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot add yourself as a close friend")
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO close_friends (user_id, friend_id) VALUES (?, ?)", (current_user["id"], friend_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Already a close friend")
+    conn.close()
+    return {"message": "Added to close friends"}
+
+@app.post("/close-friends/remove")
+async def remove_close_friend(data: FriendIdRequest, current_user: dict = Depends(get_current_user)):
+    friend_id = data.friend_id
+    conn = sqlite3.connect("chat.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM close_friends WHERE user_id = ? AND friend_id = ?", (current_user["id"], friend_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Removed from close friends"}
 
 if __name__ == "__main__":
     import uvicorn

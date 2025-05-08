@@ -1522,9 +1522,17 @@ body {
 
 .chat-message .username {
     font-weight: bold;
-    color: #3498db;
-    margin-bottom: 5px;
-    font-size: 14px;
+    margin-bottom: 4px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.chat-message .username .star {
+    color: #FFD700;
+    font-size: 1.1em;
+    margin-left: 2px;
 }
 
 .chat-message.own-message .username {
