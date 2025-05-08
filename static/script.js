@@ -1752,8 +1752,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
             `;
 
-            // Добавляем контекстное меню для собственных сообщений, если есть текст ИЛИ медиафайлы
-            if (isOwnMessage && (message.content || (message.files && message.files.length > 0))) {
+            // Добавляем контекстное меню для всех сообщений, если есть текст ИЛИ медиафайлы
+            if (message.content || (message.files && message.files.length > 0)) {
                 div.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     // Закрываем все открытые меню
@@ -1761,14 +1761,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     const optionsMenu = document.createElement('div');
                     optionsMenu.className = 'message-options';
-                    optionsMenu.innerHTML = `
-                        <button class="edit-message-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 20h9" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-                                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            Edit
-                        </button>
+                    // Только для своих сообщений показываем Edit
+                    if (isOwnMessage) {
+                        optionsMenu.innerHTML += `
+                            <button class="edit-message-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 20h9" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                Edit
+                            </button>
+                        `;
+                    }
+                    // Delete и Translate доступны для всех
+                    optionsMenu.innerHTML += `
                         <button class="delete-message-btn">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M3 6h18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
@@ -1779,6 +1785,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                             </svg>
                             Delete
                         </button>
+                        <button class="translate-message-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2v20M2 12h20" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Translate
+                        </button>
                     `;
 
                     // Позиционируем меню
@@ -1788,43 +1800,54 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     document.body.appendChild(optionsMenu);
 
-                    // Обработчик для кнопки редактирования
-                    optionsMenu.querySelector('.edit-message-btn').addEventListener('click', () => {
-                        const contentText = div.querySelector('.content-text');
-                        const originalContent = contentText.textContent || '';
-                        contentText.style.display = 'block'; // Показываем поле, если его не было
-                        contentText.innerHTML = `<input type="text" class="edit-message-input" value="${originalContent}" placeholder="Введите текст (опционально)" />`;
-                        const input = contentText.querySelector('.edit-message-input');
-                        input.focus();
+                    // Обработчик для кнопки редактирования (только для своих сообщений)
+                    if (isOwnMessage) {
+                        optionsMenu.querySelector('.edit-message-btn').addEventListener('click', () => {
+                            const contentText = div.querySelector('.content-text');
+                            const originalContent = contentText.textContent || '';
+                            contentText.style.display = 'block';
+                            contentText.innerHTML = `<input type="text" class="edit-message-input" value="${originalContent}" placeholder="Введите текст (опционально)" />`;
+                            const input = contentText.querySelector('.edit-message-input');
+                            input.focus();
 
-                        input.addEventListener('blur', async () => {
-                            const newContent = input.value.trim();
-                            try {
-                                const response = await fetch(`/messages/${message.id}/edit`, {
-                                    method: 'PUT',
-                                    headers: {
-                                        'Content-Type': 'application/x-www-form-urlencoded',
-                                        'Authorization': `Bearer ${token}`
-                                    },
-                                    body: new URLSearchParams({ content: newContent || null }) // Отправляем null, если текст пустой
-                                });
-                                const result = await response.json();
-                                if (response.ok) {
-                                    if (newContent) {
-                                        contentText.textContent = newContent;
-                                        contentText.style.display = 'block';
+                            input.addEventListener('blur', async () => {
+                                const newContent = input.value.trim();
+                                try {
+                                    const response = await fetch(`/messages/${message.id}/edit`, {
+                                        method: 'PUT',
+                                        headers: {
+                                            'Content-Type': 'application/x-www-form-urlencoded',
+                                            'Authorization': `Bearer ${token}`
+                                        },
+                                        body: new URLSearchParams({ content: newContent || null })
+                                    });
+                                    const result = await response.json();
+                                    if (response.ok) {
+                                        if (newContent) {
+                                            contentText.textContent = newContent;
+                                            contentText.style.display = 'block';
+                                        } else {
+                                            contentText.style.display = 'none';
+                                        }
+                                        ws.send(JSON.stringify({
+                                            action: 'edit',
+                                            message_id: message.id,
+                                            content: newContent || null,
+                                            receiver_id: currentChatUserId,
+                                            group_id: currentGroupId
+                                        }));
                                     } else {
-                                        contentText.style.display = 'none'; // Скрываем, если текст пустой
+                                        showFlashMessage(result.detail, 'danger');
+                                        if (originalContent) {
+                                            contentText.textContent = originalContent;
+                                            contentText.style.display = 'block';
+                                        } else {
+                                            contentText.style.display = 'none';
+                                        }
                                     }
-                                    ws.send(JSON.stringify({
-                                        action: 'edit',
-                                        message_id: message.id,
-                                        content: newContent || null,
-                                        receiver_id: currentChatUserId,
-                                        group_id: currentGroupId
-                                    }));
-                                } else {
-                                    showFlashMessage(result.detail, 'danger');
+                                } catch (error) {
+                                    console.error('Ошибка редактирования сообщения:', error);
+                                    showFlashMessage(`Не удалось отредактировать сообщение: ${error.message}`, 'danger');
                                     if (originalContent) {
                                         contentText.textContent = originalContent;
                                         contentText.style.display = 'block';
@@ -1832,50 +1855,85 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         contentText.style.display = 'none';
                                     }
                                 }
-                            } catch (error) {
-                                console.error('Ошибка редактирования сообщения:', error);
-                                showFlashMessage(`Не удалось отредактировать сообщение: ${error.message}`, 'danger');
-                                if (originalContent) {
-                                    contentText.textContent = originalContent;
-                                    contentText.style.display = 'block';
-                                } else {
-                                    contentText.style.display = 'none';
-                                }
-                            }
-                            optionsMenu.remove();
-                        });
+                                optionsMenu.remove();
+                            });
 
-                        input.addEventListener('keypress', async (e) => {
-                            if (e.key === 'Enter') {
-                                input.blur();
-                            }
+                            input.addEventListener('keypress', async (e) => {
+                                if (e.key === 'Enter') {
+                                    input.blur();
+                                }
+                            });
                         });
-                    });
+                    }
 
                     // Обработчик для кнопки удаления
                     optionsMenu.querySelector('.delete-message-btn').addEventListener('click', async () => {
-                        try {
-                            const response = await fetch(`/messages/${message.id}`, {
-                                method: 'DELETE',
-                                headers: {
-                                    'Authorization': `Bearer ${token}`
+                        if (isOwnMessage) {
+                            // Удаляем для всех (бэкенд)
+                            try {
+                                const response = await fetch(`/messages/${message.id}`, {
+                                    method: 'DELETE',
+                                    headers: {
+                                        'Authorization': `Bearer ${token}`
+                                    }
+                                });
+                                const result = await response.json();
+                                if (response.ok) {
+                                    div.remove();
+                                    ws.send(JSON.stringify({
+                                        action: 'delete',
+                                        message_id: message.id,
+                                        receiver_id: currentChatUserId,
+                                        group_id: currentGroupId
+                                    }));
+                                } else {
+                                    showFlashMessage(result.detail, 'danger');
                                 }
+                            } catch (error) {
+                                console.error('Ошибка удаления сообщения:', error);
+                                showFlashMessage(`Не удалось удалить сообщение: ${error.message}`, 'danger');
+                            }
+                        } else {
+                            // Удаляем только для себя (только из DOM)
+                            div.remove();
+                        }
+                        optionsMenu.remove();
+                    });
+
+                    // Обработчик для кнопки перевода
+                    optionsMenu.querySelector('.translate-message-btn').addEventListener('click', async () => {
+                        const contentText = div.querySelector('.content-text');
+                        const originalContent = contentText.textContent || '';
+                        let translationDiv = div.querySelector('.translation-text');
+                        if (translationDiv) translationDiv.remove();
+                        translationDiv = document.createElement('div');
+                        translationDiv.className = 'translation-text';
+                        translationDiv.style.marginTop = '8px';
+                        translationDiv.style.fontStyle = 'italic';
+                        translationDiv.style.color = '#ffd700';
+                        translationDiv.textContent = 'Translating...';
+                        contentText.parentNode.appendChild(translationDiv);
+                        try {
+                            const isRussian = /[\u0400-\u04FF]/.test(originalContent);
+                            const sourceLang = isRussian ? 'ru' : 'en';
+                            const targetLang = isRussian ? 'en' : 'ru';
+                            const response = await fetch('/translate', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    q: originalContent,
+                                    source: sourceLang,
+                                    target: targetLang
+                                })
                             });
-                            const result = await response.json();
-                            if (response.ok) {
-                                div.remove();
-                                ws.send(JSON.stringify({
-                                    action: 'delete',
-                                    message_id: message.id,
-                                    receiver_id: currentChatUserId,
-                                    group_id: currentGroupId
-                                }));
+                            const data = await response.json();
+                            if (data && data.data && data.data.translations && data.data.translations[0]) {
+                                translationDiv.textContent = data.data.translations[0].translatedText;
                             } else {
-                                showFlashMessage(result.detail, 'danger');
+                                translationDiv.textContent = 'Translation failed.';
                             }
                         } catch (error) {
-                            console.error('Ошибка удаления сообщения:', error);
-                            showFlashMessage(`Не удалось удалить сообщение: ${error.message}`, 'danger');
+                            translationDiv.textContent = 'Translation failed.';
                         }
                         optionsMenu.remove();
                     });
