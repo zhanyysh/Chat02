@@ -1110,10 +1110,6 @@ body {
     transition: transform 0.3s ease;
 }
 
-.sidebar:hover {
-    transform: translateX(5px);
-}
-
 .sidebar-header {
     padding: 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -2479,4 +2475,117 @@ body.settings-bg {
     flex-direction: row-reverse;
     justify-content: flex-end;
     margin-left: auto;
+}
+
+.translation-text {
+    margin-top: 8px;
+    font-style: italic;
+    color: #ffd700;
+    font-size: 16px;
+    background: rgba(52, 152, 219, 0.08);
+    border-radius: 8px;
+    padding: 6px 12px;
+    display: inline-block;
+    max-width: 100%;
+    word-break: break-word;
+}
+
+#close-friends-modal.modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    justify-content: center;
+    align-items: center;
+}
+#close-friends-modal.active { display: flex !important; }
+.close-friends-content {
+    background: linear-gradient(135deg, #2A3B5A 0%, #1F2A44 100%);
+    border-radius: 18px;
+    padding: 24px 18px 18px 18px;
+    width: 320px;
+    min-height: 400px;
+    color: #fff;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+.close-friends-content h2 {
+    text-align: center;
+    margin-bottom: 12px;
+}
+.close-modal-btn {
+    position: absolute;
+    top: 12px; left: 12px;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+}
+.search-container {
+    display: flex;
+    margin-bottom: 10px;
+}
+#close-friends-search {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px 0 0 8px;
+    border: none;
+    background: #354469;
+    color: #fff;
+}
+#close-friends-search-btn {
+    background: #354469;
+    border: none;
+    color: #fff;
+    border-radius: 0 8px 8px 0;
+    padding: 0 12px;
+    cursor: pointer;
+}
+#close-friends-results, #close-friends-list {
+    margin: 8px 0;
+    flex: 1;
+    overflow-y: auto;
+}
+.close-friend-user {
+    display: flex;
+    align-items: center;
+    background: #22304a;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.close-friend-user.selected, .close-friend-user:hover {
+    background: #354469;
+}
+.close-friend-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: #3498db;
+    margin-right: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+}
+.close-friend-name {
+    font-size: 16px;
+    color: #fff;
+}
+#close-friends-ready-btn {
+    margin-top: 16px;
+    background: #3498db;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 0;
+    font-size: 18px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+#close-friends-ready-btn:hover {
+    background: #2980b9;
 }

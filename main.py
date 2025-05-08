@@ -17,6 +17,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from contextlib import contextmanager
+import requests
 
 # Load environment variables from .env file
 load_dotenv()
@@ -1704,6 +1705,28 @@ async def admin_get_group_messages(group_id: int, current_user: dict = Depends(g
                 "files": json.loads(row[9]) if row[9] else []
             })
         return messages
+
+@app.post('/translate')
+async def translate(request: Request):
+    data = await request.json()
+    text = data.get('q')
+    source = data.get('source')
+    target = data.get('target')
+    if not text or not source or not target:
+        raise HTTPException(status_code=400, detail='Missing parameters')
+    url = 'https://translation.googleapis.com/language/translate/v2'
+    payload = {
+        'q': text,
+        'source': source,
+        'target': target,
+        'format': 'text',
+        'key': "AIzaSyBAo4uw0AFs5dNHiIJa6Ho1qKi-jaD8IVE"
+    }
+    response = requests.post(url, data=payload)
+    if response.status_code != 200:
+        print(response.text)  # Print the error for debugging
+        raise HTTPException(status_code=500, detail='Translation API error')
+    return response.json()
 
 if __name__ == "__main__":
     import uvicorn

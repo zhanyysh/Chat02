@@ -19,12 +19,17 @@
             <button class="logout-btn" id="logout-btn"><span>⎋</span> Log out</button>
         </div>
     </div>
-    <div id="close-friends-modal" class="modal" style="display:none;">
-        <div class="modal-content" style="max-width:350px;">
+    <div id="close-friends-modal" class="modal">
+        <div class="close-friends-content">
+            <button class="close-modal-btn" id="close-close-friends-btn">&larr;</button>
             <h2>Close Friends</h2>
-            <input id="close-friends-search" type="text" placeholder="Search" style="width:100%;margin-bottom:10px;">
+            <div class="search-container">
+                <input type="text" id="close-friends-search" placeholder="Search" />
+                <button id="close-friends-search-btn">&#128269;</button>
+            </div>
+            <div id="close-friends-results"></div>
             <div id="close-friends-list"></div>
-            <button id="close-friends-ready" style="margin-top:15px;width:100%;">Ready</button>
+            <button id="close-friends-ready-btn">Ready</button>
         </div>
     </div>
     <script>
