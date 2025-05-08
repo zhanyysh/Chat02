@@ -14,17 +14,17 @@
         <div class="handle" id="settings-handle">@username</div>
         <div class="settings-list">
             <button id="my-account-btn"><span>👤</span> My Account</button>
-            <button id="close-friends-btn"><span>⭐</span> Close Friends</button>
+            <button id="open-close-friends-btn" type="button" class="settings-list-btn"><span>⭐</span> Close Friends</button>
             <button id="change-password-btn"><span>🔒</span> Change Password</button>
             <button class="logout-btn" id="logout-btn"><span>⎋</span> Log out</button>
         </div>
     </div>
     <div id="close-friends-modal" class="modal">
         <div class="close-friends-content">
-            <button class="close-modal-btn" id="close-close-friends-btn">&larr;</button>
+            <button class="close-modal-btn" onclick="closeCloseFriendsModal()">&larr;</button>
             <h2>Close Friends</h2>
             <div class="search-container">
-                <input type="text" id="close-friends-search" placeholder="Search" />
+                <input id="close-friends-search" type="text" placeholder="Search">
                 <button id="close-friends-search-btn">&#128269;</button>
             </div>
             <div id="close-friends-results"></div>
@@ -33,7 +33,6 @@
         </div>
     </div>
     <script>
-        // Load user info
         const token = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('token');
         fetch('/users/me', {
             headers: { 'Authorization': 'Bearer ' + token }
@@ -47,6 +46,7 @@
                 document.getElementById('settings-avatar').src = user.avatar_url;
             }
         });
+
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('my-account-btn').onclick = function() {
                 window.location.href = '/my-profile?token=' + encodeURIComponent(token);
@@ -58,11 +58,89 @@
                 localStorage.removeItem('token');
                 window.location.href = '/';
             };
-            document.getElementById('close-friends-btn').onclick = function() {
-                // If you have a close friends page, use this:
-                // window.location.href = '/close-friends?token=' + encodeURIComponent(token);
-                alert('Close Friends page coming soon!');
+
+            // --- MODAL LOGIC START ---
+            document.getElementById('open-close-friends-btn').onclick = openCloseFriendsModal;
+            document.getElementById('close-friends-ready-btn').onclick = closeCloseFriendsModal;
+
+            function openCloseFriendsModal() {
+                document.getElementById('close-friends-modal').classList.add('active');
+                loadCloseFriends();
+            }
+            function closeCloseFriendsModal() {
+                document.getElementById('close-friends-modal').classList.remove('active');
+                document.getElementById('close-friends-search').value = '';
+                document.getElementById('close-friends-results').innerHTML = '';
+            }
+
+            async function loadCloseFriends() {
+                const res = await fetch('/close-friends', {headers: {'Authorization': 'Bearer ' + token}});
+                const friends = await res.json();
+                renderCloseFriendsList(friends);
+            }
+
+            function renderCloseFriendsList(friends) {
+                const list = document.getElementById('close-friends-list');
+                list.innerHTML = '';
+                friends.forEach(friend => {
+                    const div = document.createElement('div');
+                    div.className = 'close-friend-user selected';
+                    div.innerHTML = `
+                        <div class="close-friend-avatar"><span>&#128100;</span></div>
+                        <div class="close-friend-name">${friend.username}</div>
+                        <button onclick="removeCloseFriend(${friend.id})" style="margin-left:auto;background:none;border:none;color:#e74c3c;font-size:18px;cursor:pointer;">&times;</button>
+                    `;
+                    list.appendChild(div);
+                });
+            }
+
+            window.removeCloseFriend = async function(friendId) {
+                await fetch('/close-friends/remove', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                    body: JSON.stringify({friend_id: friendId})
+                });
+                loadCloseFriends();
             };
+
+            document.getElementById('close-friends-search-btn').onclick = searchCloseFriends;
+            document.getElementById('close-friends-search').onkeyup = function(e) {
+                if (e.key === 'Enter') searchCloseFriends();
+            };
+            async function searchCloseFriends() {
+                const query = document.getElementById('close-friends-search').value.trim();
+                if (query.length < 2) return;
+                const res = await fetch(`/users/search?query=${encodeURIComponent(query)}`, {headers: {'Authorization': 'Bearer ' + token}});
+                const users = await res.json();
+                renderCloseFriendsResults(users);
+            }
+
+            function renderCloseFriendsResults(users) {
+                const results = document.getElementById('close-friends-results');
+                results.innerHTML = '';
+                users.forEach(user => {
+                    const div = document.createElement('div');
+                    div.className = 'close-friend-user';
+                    div.innerHTML = `
+                        <div class="close-friend-avatar"><span>&#128100;</span></div>
+                        <div class="close-friend-name">${user.username}</div>
+                        <button onclick="addCloseFriend(${user.id})" style="margin-left:auto;background:none;border:none;color:#2ecc71;font-size:18px;cursor:pointer;">+</button>
+                    `;
+                    results.appendChild(div);
+                });
+            }
+
+            window.addCloseFriend = async function(friendId) {
+                await fetch('/close-friends/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                    body: JSON.stringify({friend_id: friendId})
+                });
+                loadCloseFriends();
+                document.getElementById('close-friends-results').innerHTML = '';
+                document.getElementById('close-friends-search').value = '';
+            };
+            // --- MODAL LOGIC END ---
         });
     </script>
 </body>
