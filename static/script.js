@@ -1506,6 +1506,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const user = await response.json();
                 currentUserId = user.id;
                 ws = new WebSocket(`ws://${window.location.host}/ws/${user.id}`);
+                // ws = new WebSocket(`ws://192.168.0.100:8000/ws/${userId}`);
 
                 ws.onopen = () => {
                     console.log('WebSocket соединение установлено');
@@ -1652,17 +1653,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Отображение сообщения
         function displayMessage(message) {
-            // Дополнительная проверка: не вызываем функцию для сообщений с action: 'edit' или 'delete'
             if (message.action === 'edit' || message.action === 'delete') {
                 console.warn('displayMessage вызвана для сообщения с action:', message.action, '— игнорируем');
                 return;
             }
-
+        
             console.log(`Отображаю сообщение: sender_id=${message.sender_id}, currentUserId=${currentUserId}, isOwnMessage=${message.sender_id === currentUserId}`);
-
+        
             const messageDate = new Date(message.timestamp);
             const messageDateString = messageDate.toISOString().split('T')[0];
-
+        
             if (lastMessageDate !== messageDateString) {
                 const divider = document.createElement('div');
                 divider.className = 'date-divider';
@@ -1670,13 +1670,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 chatMessages.appendChild(divider);
                 lastMessageDate = messageDateString;
             }
-
+        
             const div = document.createElement('div');
             const isOwnMessage = message.sender_id === currentUserId;
             div.className = `chat-message ${isOwnMessage ? 'own-message' : ''}`;
             div.dataset.read = message.is_read ? 'true' : 'false';
-            div.dataset.messageId = message.id; // Добавляем ID сообщения
-
+            div.dataset.messageId = message.id;
+        
             const avatarDiv = document.createElement('div');
             avatarDiv.className = 'message-avatar';
             if (message.avatar_url) {
@@ -1693,18 +1693,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </svg>
                 `;
             }
-
+        
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content-wrapper';
             const date = new Date(message.timestamp);
             const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
+        
             let mediaContent = '';
             if (message.files && message.files.length > 0) {
-                // Считаем количество изображений и видео
                 const mediaItems = message.files.filter(file => file.file_type === 'image' || file.file_type === 'video').length;
-                
-                // Определяем класс в зависимости от количества медиафайлов
                 let mediaClass = '';
                 if (mediaItems === 1) {
                     mediaClass = 'single-image';
@@ -1713,7 +1710,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else if (mediaItems >= 3) {
                     mediaClass = 'multiple-images';
                 }
-
+        
                 mediaContent = `<div class="media-content ${mediaClass}">`;
                 message.files.forEach(file => {
                     if (file.file_type === 'image') {
@@ -1742,7 +1739,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 mediaContent += '</div>';
             }
-
+        
             contentDiv.innerHTML = `
                 <div class="username">${message.username}</div>
                 <div class="content">
@@ -2066,7 +2063,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const item = document.createElement('div');
                             item.className = 'search-result-item';
                             item.innerHTML = `
-                                <div class="avatar">${user.username[0].toUpperCase()}</div>
+                                <div class="avatar">
+                                    ${user.avatar_url ? `<img src='${user.avatar_url}' alt='${user.username}'>` : user.username[0].toUpperCase()}
+                                </div>
                                 <div class="username">${user.username}</div>
                             `;
                             item.addEventListener('click', () => {
@@ -2077,7 +2076,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 loadMessages(user.id, null);
                                 searchResults.classList.remove('active');
                                 searchInput.value = '';
-                                addChatToList(user.id, null, user.username, null, 0, false);
+                                addChatToList(user.id, null, user.username, user.avatar_url, 0, false);
                                 document.querySelectorAll('.group-item').forEach(item => item.classList.remove('active'));
                                 const chatItem = document.querySelector(`.group-item[data-id="${user.id}"][data-is-group="false"]`);
                                 if (chatItem) chatItem.classList.add('active');

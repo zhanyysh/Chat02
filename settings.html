@@ -14,23 +14,11 @@
         <div class="handle" id="settings-handle">@username</div>
         <div class="settings-list">
             <button id="my-account-btn"><span>👤</span> My Account</button>
-            <button id="close-friends-btn"><span>⭐</span> Close Friends</button>
             <button id="change-password-btn"><span>🔒</span> Change Password</button>
             <button class="logout-btn" id="logout-btn"><span>⎋</span> Log out</button>
         </div>
     </div>
     <div id="close-friends-modal" class="modal">
-        <div class="close-friends-content">
-            <button class="close-modal-btn" id="close-close-friends-btn">&larr;</button>
-            <h2>Close Friends</h2>
-            <div class="search-container">
-                <input type="text" id="close-friends-search" placeholder="Search" />
-                <button id="close-friends-search-btn">&#128269;</button>
-            </div>
-            <div id="close-friends-results"></div>
-            <div id="close-friends-list"></div>
-            <button id="close-friends-ready-btn">Ready</button>
-        </div>
     </div>
     <script>
         // Load user info
@@ -52,16 +40,11 @@
                 window.location.href = '/my-profile?token=' + encodeURIComponent(token);
             };
             document.getElementById('change-password-btn').onclick = function() {
-                window.location.href = '/change-password?token=' + encodeURIComponent(token);
+                window.location.href = '/forgot-password?token=' + encodeURIComponent(token);
             };
             document.getElementById('logout-btn').onclick = function() {
                 localStorage.removeItem('token');
                 window.location.href = '/';
-            };
-            document.getElementById('close-friends-btn').onclick = function() {
-                // If you have a close friends page, use this:
-                // window.location.href = '/close-friends?token=' + encodeURIComponent(token);
-                alert('Close Friends page coming soon!');
             };
         });
     </script>

@@ -1,4 +1,3 @@
-// Admin panel functionality
 document.addEventListener('DOMContentLoaded', function() {
     let currentTab = 'chats';
     let currentChatId = null;
@@ -132,15 +131,26 @@ document.addEventListener('DOMContentLoaded', function() {
             chatElement.className = 'group-item';
             chatElement.dataset.id = chat.id;
             chatElement.dataset.type = 'chat';
-            
+
+            // Аватарки пользователей (одна поверх другой)
+            const avatar1 = chat.user1_avatar_url || '';
+            const avatar2 = chat.user2_avatar_url || '';
+            const avatarBlock = `
+                <div class="chat-avatars">
+                    <div class="avatar avatar1">
+                        ${avatar1 ? `<img src='${avatar1}' alt='${chat.user1_username}'>` : `<span>${chat.user1_username[0] || '?'}</span>`}
+                    </div>
+                    <div class="avatar avatar2">
+                        ${avatar2 ? `<img src='${avatar2}' alt='${chat.user2_username}'>` : `<span>${chat.user2_username[0] || '?'}</span>`}
+                    </div>
+                </div>
+            `;
+
             chatElement.innerHTML = `
                 <div class="group-info">
+                    ${avatarBlock}
                     <div>
-                        <div class="group-name">${chat.user1_username} ↔ ${chat.user2_username}</div>
-                        ${chat.last_message ? `
-                            <div class="last-message">${chat.last_message}</div>
-                            <div class="last-message-time">${formatDate(chat.last_message_time)}</div>
-                        ` : ''}
+                        <div class="group-name">${chat.user1_username} --- ${chat.user2_username}</div>
                     </div>
                 </div>
             `;
@@ -150,6 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 chatElement.classList.add('active');
                 currentChatId = chat.id;
                 currentGroupId = null;
+                document.getElementById('chat-title').textContent = `${chat.user1_username} --- ${chat.user2_username}`;
                 loadChatMessages(chat.id);
             });
             
@@ -166,16 +177,22 @@ document.addEventListener('DOMContentLoaded', function() {
             groupElement.className = 'group-item';
             groupElement.dataset.id = group.id;
             groupElement.dataset.type = 'group';
-            
+
+            // Аватарка группы
+            const avatar = group.avatar_url || '';
+            const avatarBlock = `
+                <div class="chat-avatars">
+                    <div class="avatar avatar1">
+                        ${avatar ? `<img src='${avatar}' alt='${group.name}'>` : `<span>${group.name[0] || '?'}</span>`}
+                    </div>
+                </div>
+            `;
+
             groupElement.innerHTML = `
                 <div class="group-info">
+                    ${avatarBlock}
                     <div>
                         <div class="group-name">${group.name}</div>
-                        <div class="group-description">${group.description || ''}</div>
-                        <div class="group-meta">
-                            <span>Создатель: ${group.creator_username}</span>
-                            <span>Участников: ${group.member_count}</span>
-                        </div>
                     </div>
                 </div>
             `;
@@ -185,6 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 groupElement.classList.add('active');
                 currentGroupId = group.id;
                 currentChatId = null;
+                document.getElementById('chat-title').textContent = group.name;
                 loadGroupMessages(group.id);
             });
             
