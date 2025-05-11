@@ -20,9 +20,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Search functionality
     const searchInput = document.getElementById('search-input');
-    searchInput.addEventListener('input', debounce(() => {
-        loadContent();
-    }, 300));
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(() => {
+            loadContent();
+        }, 300));
+    }
 
     // Menu functionality
     const menuIcon = document.querySelector('.menu-icon');
@@ -116,6 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
                 const groups = await response.json();
+                console.log('Ответ от /admin/groups:', groups);
                 displayGroups(groups);
             }
         } catch (error) {
@@ -132,15 +135,26 @@ document.addEventListener('DOMContentLoaded', function() {
             chatElement.className = 'group-item';
             chatElement.dataset.id = chat.id;
             chatElement.dataset.type = 'chat';
-            
+
+            // Аватарки пользователей (одна поверх другой)
+            const avatar1 = chat.user1_avatar_url || '';
+            const avatar2 = chat.user2_avatar_url || '';
+            const avatarBlock = `
+                <div class="chat-avatars">
+                    <div class="avatar avatar1">
+                        ${avatar1 ? `<img src='${avatar1}' alt='${chat.user1_username}'>` : `<span>${chat.user1_username[0] || '?'}</span>`}
+                    </div>
+                    <div class="avatar avatar2">
+                        ${avatar2 ? `<img src='${avatar2}' alt='${chat.user2_username}'>` : `<span>${chat.user2_username[0] || '?'}</span>`}
+                    </div>
+                </div>
+            `;
+
             chatElement.innerHTML = `
                 <div class="group-info">
+                    ${avatarBlock}
                     <div>
-                        <div class="group-name">${chat.user1_username} ↔ ${chat.user2_username}</div>
-                        ${chat.last_message ? `
-                            <div class="last-message">${chat.last_message}</div>
-                            <div class="last-message-time">${formatDate(chat.last_message_time)}</div>
-                        ` : ''}
+                        <div class="group-name">${chat.user1_username} --- ${chat.user2_username}</div>
                     </div>
                 </div>
             `;
@@ -166,16 +180,24 @@ document.addEventListener('DOMContentLoaded', function() {
             groupElement.className = 'group-item';
             groupElement.dataset.id = group.id;
             groupElement.dataset.type = 'group';
-            
+
+            // Аватарка группы
+            let avatar = group.avatar_url || '';
+            if (avatar && !avatar.startsWith('/')) avatar = '/' + avatar;
+            console.log('GROUP:', group);
+            console.log('GROUP AVATAR URL:', avatar);
+            console.log('IMG HTML:', `<img src='${avatar}' alt='${group.name}'>`);
+            const avatarBlock = `
+                <div class="group-avatar">
+                    ${avatar ? `<img src='${avatar}' alt='${group.name}'>` : `<span>${group.name[0] || '?'} </span>`}
+                </div>
+            `;
+
             groupElement.innerHTML = `
                 <div class="group-info">
+                    ${avatarBlock}
                     <div>
                         <div class="group-name">${group.name}</div>
-                        <div class="group-description">${group.description || ''}</div>
-                        <div class="group-meta">
-                            <span>Создатель: ${group.creator_username}</span>
-                            <span>Участников: ${group.member_count}</span>
-                        </div>
                     </div>
                 </div>
             `;

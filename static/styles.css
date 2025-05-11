@@ -1327,6 +1327,8 @@ body {
 .group-name {
     font-size: 16px;
     color: #fff;
+    font-weight: 600;
+    margin-bottom: 2px;
 }
 
 .unread-count {
@@ -2588,4 +2590,142 @@ body.settings-bg {
 }
 #close-friends-ready-btn:hover {
     background: #2980b9;
+}
+
+.admin-tabs {
+    display: flex;
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.admin-tab {
+    flex: 1;
+    background: linear-gradient(90deg, #354469 0%, #3D5B97 100%);
+    color: #fff;
+    border: none;
+    border-radius: 10px 10px 0 0;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 12px 0;
+    margin: 0;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.08);
+    transition: background 0.3s, color 0.3s, box-shadow 0.3s, transform 0.2s;
+    opacity: 0.85;
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    min-width: 0;
+}
+
+.admin-tab:hover {
+    background: linear-gradient(90deg, #3D5B97 0%, #354469 100%);
+    color: #ffd700;
+    opacity: 1;
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 4px 16px rgba(52, 152, 219, 0.15);
+}
+
+.admin-tab.active {
+    background: linear-gradient(90deg, #3498db 0%, #2980b9 100%);
+    color: #fff;
+    opacity: 1;
+    box-shadow: 0 6px 24px rgba(52, 152, 219, 0.18);
+    border-bottom: 3px solid #ffd700;
+    z-index: 2;
+}
+
+/* Улучшенный стиль для кнопки удаления (danger) */
+.danger, .chat-options-drawer button.danger {
+    background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    padding: 10px 24px;
+    font-size: 15px;
+    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.15);
+    transition: background 0.3s, color 0.3s, box-shadow 0.3s, transform 0.2s;
+    cursor: pointer;
+}
+
+.danger:hover, .chat-options-drawer button.danger:hover {
+    background: linear-gradient(90deg, #c0392b 0%, #e74c3c 100%);
+    color: #ffd700;
+    transform: scale(1.06) rotate(-2deg);
+    box-shadow: 0 6px 24px rgba(231, 76, 60, 0.22);
+}
+
+.chat-avatars {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    margin-right: 16px;
+    display: inline-block;
+}
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    position: absolute;
+    background: #2A3B5A;
+    display: flex;
+    align-items: center;
+}
+
+.avatar1 {
+    left: 0;
+    top: 0;
+    z-index: 2;
+    background: #3498db;
+    border: 2px solid #3498db;
+    box-shadow: 0 2px 8px rgba(52,152,219,0.10);
+}
+.avatar2 {
+    left: 16px;
+    top: 8px;
+    z-index: 1;
+    background: #e67e22;
+    border: 2px solid #e67e22;
+    box-shadow: 0 2px 8px rgba(230,126,34,0.10);
+}
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.group-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #8e44ad;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #fff;
+    font-size: 20px;
+    margin-right: 16px;
+    box-shadow: 0 2px 8px rgba(142,68,173,0.10);
+    border: 2px solid #8e44ad;
+}
+.group-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+.group-item .group-info {
+    display: flex;
+    align-items: center;
+}
+.group-item .group-name {
+    font-size: 16px;
+    color: #fff;
+    font-weight: 600;
+    margin-bottom: 2px;
 }

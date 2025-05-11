@@ -64,6 +64,8 @@ class AdminChat(BaseModel):
     user2_id: int
     user1_username: str
     user2_username: str
+    user1_avatar_url: str | None = None
+    user2_avatar_url: str | None = None
     last_message: str | None = None
     last_message_time: str | None = None
 
@@ -988,7 +990,7 @@ async def get_group_info(group_id: int, current_user: dict = Depends(get_current
 
         # Получаем данные о группе
         cursor.execute("""
-            SELECT g.id, g.name, g.description, g.avatar_url, g.creator_id, u.username AS creator_username
+            SELECT g.id, g.name, g.description, MAX(g.avatar_url), g.creator_id, u.username AS creator_username
             FROM groups g
             JOIN users u ON g.creator_id = u.id
             WHERE g.id = ?
@@ -1561,6 +1563,8 @@ async def get_all_chats(current_user: dict = Depends(get_admin_user)):
                 cp.user2_id,
                 u1.username as user1_username,
                 u2.username as user2_username,
+                u1.avatar_url as user1_avatar_url,
+                u2.avatar_url as user2_avatar_url,
                 (
                     SELECT content 
                     FROM messages m2 
@@ -1584,15 +1588,17 @@ async def get_all_chats(current_user: dict = Depends(get_admin_user)):
         """)
         chats = cursor.fetchall()
         return [
-            AdminChat(
-                id=f"{chat[0]}_{chat[1]}",  # Create a unique ID from user IDs
-                user1_id=chat[0],
-                user2_id=chat[1],
-                user1_username=chat[2],
-                user2_username=chat[3],
-                last_message=chat[4],
-                last_message_time=chat[5]
-            )
+            {
+                "id": f"{chat[0]}_{chat[1]}",
+                "user1_id": chat[0],
+                "user2_id": chat[1],
+                "user1_username": chat[2],
+                "user2_username": chat[3],
+                "user1_avatar_url": chat[4],
+                "user2_avatar_url": chat[5],
+                "last_message": chat[6],
+                "last_message_time": chat[7],
+            }
             for chat in chats
         ]
 
@@ -1601,7 +1607,7 @@ async def get_all_groups(current_user: dict = Depends(get_admin_user)):
     with get_db() as db:
         cursor = db.cursor()
         cursor.execute("""
-            SELECT g.id, g.name, g.description, u.username as creator_username,
+            SELECT g.id, g.name, g.description, MAX(g.avatar_url), u.username as creator_username,
                    COUNT(gm.user_id) as member_count, g.created_at
             FROM groups g
             JOIN users u ON g.creator_id = u.id
@@ -1611,14 +1617,15 @@ async def get_all_groups(current_user: dict = Depends(get_admin_user)):
         """)
         groups = cursor.fetchall()
         return [
-            AdminGroup(
-                id=group[0],
-                name=group[1],
-                description=group[2],
-                creator_username=group[3],
-                member_count=group[4],
-                created_at=group[5]
-            )
+            {
+                "id": group[0],
+                "name": group[1],
+                "description": group[2],
+                "avatar_url": group[3],
+                "creator_username": group[4],
+                "member_count": group[5],
+                "created_at": group[6],
+            }
             for group in groups
         ]
 

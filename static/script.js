@@ -1286,9 +1286,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         users.forEach(user => {
                             const item = document.createElement('div');
                             item.className = 'search-result-item';
+                            const username = user.username && user.username.trim() ? user.username : "Без имени";
                             item.innerHTML = `
-                                <div class="avatar">${user.username[0].toUpperCase()}</div>
-                                <div class="username">${user.username}</div>
+                                <div class="avatar">${username[0].toUpperCase()}</div>
+                                <div class="username">${username}</div>
                             `;
                             item.addEventListener('click', () => {
                                 if (!groupMembersList.querySelector(`[data-user-id="${user.id}"]`)) {
@@ -2065,9 +2066,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         users.forEach(user => {
                             const item = document.createElement('div');
                             item.className = 'search-result-item';
+                            const username = user.username && user.username.trim() ? user.username : "Без имени";
                             item.innerHTML = `
-                                <div class="avatar">${user.username[0].toUpperCase()}</div>
-                                <div class="username">${user.username}</div>
+                                <div class="avatar">${username[0].toUpperCase()}</div>
+                                <div class="username">${username}</div>
                             `;
                             item.addEventListener('click', () => {
                                 console.log('Выбран результат поиска:', user);
@@ -2363,9 +2365,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 if (!group.members.some(member => member.id === user.id)) {
                                     const item = document.createElement('div');
                                     item.className = 'search-result-item';
+                                    const username = user.username && user.username.trim() ? user.username : "Без имени";
                                     item.innerHTML = `
-                                        <div class="avatar">${user.username[0].toUpperCase()}</div>
-                                        <div class="username">${user.username}</div>
+                                        <div class="avatar">${username[0].toUpperCase()}</div>
+                                        <div class="username">${username}</div>
                                     `;
                                     item.addEventListener('click', async () => {
                                         try {
